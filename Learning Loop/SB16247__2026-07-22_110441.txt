@@ -1,0 +1,62 @@
+LEARNING LOOP — SB16247
+============================================================
+Run:     2026-07-22 11:04:41
+Status:  NOT READY
+Model:   gpt-5.6
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\29968fcc1275\16247_1\output\SB16247
+Fingerprint: 5e734990afb9bcd9
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — NOT READY
+   - overview verification found CRITICAL gap(s)
+   - pre-validation error: StdFail_NotDone: BRep_API: command not done
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - verification error: StdFail_NotDone: BRep_API: command not done
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [MEDIUM] The side/profile view contains several short horizontal lines at different elevations, but only two edge slots are clearly present in the front view; the lines cannot all be uniquely matched to visible slot boundaries and may include faint construction, break, or scan artifacts.
+       -> Consult the original drawing or a higher-contrast scan and determine which side-view lines are true object/hidden lines before using the profile view to infer additional steps or recesses.
+   - [HIGH] The .280 +.010/-.000 note says it allows .030-.040 stock to fit at assembly, but the exact surface or feature receiving that fitting allowance is not unambiguously identified by a leader; it appears associated with plate thickness in the side view.
+       -> Verify from the original drawing or assembly that .280 +.010/-.000 governs overall plate thickness and identify which surface is to be fitted; do not reinterpret it as a slot width or local step.
+   - [MEDIUM] The two slots appear geometrically similar, and .531 R is marked TYP, but the sheet does not clearly provide a count note or fully dimension both slot profiles independently.
+       -> Use the TYP radius only for the corresponding semicircular slot ends; verify that other dimensions such as slot opening/depth are intended to repeat before manufacturing both slots identically.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 2, MEDIUM 3, LOW 1
+   - [CRITICAL] OV001 (overview): The overview clearly shows 2x slot (Open-ended horizontal U-shaped slots/notches, each terminating in a semicircular rounded end, One near the upper left edge and one near the lower left edge) but the build contains no matching feature.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: slot feature(s) — verify against the drawing
+   - [CRITICAL] OV002 (overview): The overview clearly shows 2x fillet (Semicircular internal end radii at the two slots, called out as .531 R TYP, At the closed end of each open slot) but the build contains no matching feature.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: fillet feature(s) — verify against the drawing
+   - [MEDIUM] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front, side): The side/profile view contains several short horizontal lines at different elevations, but only two edge slots are clearly present in the front view; the lines cannot all be uniquely matched to visible slot boundaries and may include faint construction, break, or scan artifacts. Recommendation: Consult the original drawing or a higher-contrast scan and determine which side-view lines are true object/hidden lines before using the profile view to infer additional steps or recesses.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (side): The .280 +.010/-.000 note says it allows .030-.040 stock to fit at assembly, but the exact surface or feature receiving that fitting allowance is not unambiguously identified by a leader; it appears associated with plate thickness in the side view. Recommendation: Verify from the original drawing or assembly that .280 +.010/-.000 governs overall plate thickness and identify which surface is to be fitted; do not reinterpret it as a slot width or local step.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-003 (overview_analysis): CROSS-VIEW CONFLICT (front): The two slots appear geometrically similar, and .531 R is marked TYP, but the sheet does not clearly provide a count note or fully dimension both slot profiles independently. Recommendation: Use the TYP radius only for the corresponding semicircular slot ends; verify that other dimensions such as slot opening/depth are intended to repeat before manufacturing both slots identically.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [LOW] OV003 (overview): Surface Finish note: Thin rectangular shim-plate body/profile (Overall part).
+       decision: attached to part metadata as a surface finish note
+       why: a note, not part geometry — no build counterpart expected
+       affects: metadata: surface finish
+
+5. BUILD / MACRO FEATURE FAILURES
+   - none
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part 'SB16247' finished NOT READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+     * prevalidation: cq_prevalidate.py (CadQuery geometry) vs build_plan.json (the single source of truth both build paths consume)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\29968fcc1275\16247_1\output\SB16247

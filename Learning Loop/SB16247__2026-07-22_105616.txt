@@ -1,0 +1,60 @@
+LEARNING LOOP — SB16247
+============================================================
+Run:     2026-07-22 10:56:16
+Status:  NOT READY
+Model:   claude-sonnet-5
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\dbc44224cf50\16247_1\output\SB16247
+Fingerprint: 338111d7be618c4c
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — NOT READY
+   - pre-validation error: StdFail_NotDone: BRep_API: command not done
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - verification error: StdFail_NotDone: BRep_API: command not done
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [LOW] The side (edge) view shows small tick/hidden-line marks along the thickness edge that could suggest a stepped or laminated cross-section, but the front view gives no indication of any step, groove, or layer change in the plate; the true cross-sectional shape of the edge is ambiguous from the views provided.
+       -> Verify with a full-scale check or additional section view whether the plate edge is a simple flat .280 thickness or has a stepped/relieved edge as hinted by the tick marks.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 2, HIGH 1, MEDIUM 3
+   - [CRITICAL] F003 (build): The .sldprt build SKIPPED feature F003 (fillet): FeatureFillet3 returned None for F003 despite verified preconditions (radius=0.013487 m, 12 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: FeatureFillet3 returned None for F003 despite verified preconditions (radius=0.013487 m, 12 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+       affects: feature F003
+   - [CRITICAL] F002 (build): The .sldprt build SKIPPED feature F002 (extrude_cut): deferred_open (zero_thickness_or_geometry): cut F002 positioned OUTSIDE the solid — its profile (0.4191, -0.019, 0.4381, 0.0521) m does not overlap the body (0.0, 0
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: deferred_open (zero_thickness_or_geometry): cut F002 positioned OUTSIDE the solid — its profile (0.4191, -0.019, 0.4381, 0.0521) m does not overlap the body (0.0, 0
+       affects: feature F002
+   - [HIGH] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front, side): The side (edge) view shows small tick/hidden-line marks along the thickness edge that could suggest a stepped or laminated cross-section, but the front view gives no indication of any step, groove, or layer change in the plate; the true cross-sectional shape of the edge is ambiguous from the views provided. Recommendation: Verify with a full-scale check or additional section view whether the plate edge is a simple flat .280 thickness or has a stepped/relieved edge as hinted by the tick marks.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM]  (build): Build caveat: F003 (fillet) skipped: FeatureFillet3 returned None for F003 despite verified preconditions (radius=0.013487 m, 12 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM]  (build): Build caveat: F002 (extrude_cut) deferred_open after retries: cut F002 positioned OUTSIDE the solid — its profile (0.4191, -0.019, 0.4381, 0.0521) m does not overlap the body (0.0, 0
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM] OV005 (overview): The overview POSSIBLY shows 2x chamfer (Small edge break marks shown on the thin side view, possibly indicating broken/chamfered edges top and bottom, top and bottom edges of side view) with no matching feature in the build.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: chamfer feature(s) — verify against the drawing
+
+5. BUILD / MACRO FEATURE FAILURES
+   - feature F002 FAILED: cut F002 positioned OUTSIDE the solid — its profile (0.4191, -0.019, 0.4381, 0.0521) m does not overlap the body (0.0, 0.0, 0.0254, 0.0508) m. Root cause: the feature's location was assumed (POSITION ASSUMED) and lands off the part. The Stage 2.5 completeness gate now excludes position-unresolved cuts before the build — add an X/Y location dimension on the drawing and re-run; do not patch the build.
+   - feature F003 FAILED: FeatureFillet3 returned None for F003 despite verified preconditions (radius=0.013487 m, 12 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part 'SB16247' finished NOT READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * macro: solidworks_builder.py (COM feature build) + macro_generator.py (VBA for that feature type)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+     * prevalidation: cq_prevalidate.py (CadQuery geometry) vs build_plan.json (the single source of truth both build paths consume)
+     * skipped: macro_generator.py / solidworks_builder.py (prohibited/unsupported feature — add real support or a better manual step)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\dbc44224cf50\16247_1\output\SB16247

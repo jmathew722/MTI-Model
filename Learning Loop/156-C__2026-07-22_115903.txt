@@ -1,0 +1,52 @@
+LEARNING LOOP — 156-C
+============================================================
+Run:     2026-07-22 11:59:03
+Status:  NOT READY
+Model:   gpt-5.6
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\29968fcc1275\A001641E_1\output\156-C
+Fingerprint: 04135b5f9d82b8b0
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — NOT READY
+   - overview verification found CRITICAL gap(s)
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [HIGH] The weather-stripping BOM specifies 23 inches, but the dashed inset path is approximately a four-sided rectangle whose full perimeter appears substantially longer than 23 inches; the exact strip start/stop and governed sides are not explicitly shown.
+       -> Verify whether the dashed line denotes the complete strip path, only selected sides, or a reference boundary; obtain an assembly/application note or revised detail specifying strip routing, start/stop points, joints, and orientation.
+   - [LOW] The side/profile view contains small projected interruptions corresponding generally to face features, but it does not clearly distinguish all seven holes from the semicircular edge cutout at this scan quality.
+       -> Use the explicit front-view '.218 DR. THRU 7 HOLES' callout as governing, and inspect the original drawing if individual side-view projection marks are needed for verification.
+   - [MEDIUM] The bottom semicircular feature is labeled '3.062 DIA.' although only a semicircular opening is present at the plate edge; the intended full-circle construction center is shown, but no explicit 'R' or cutout wording is provided.
+       -> Interpret it as a semicircular edge cutout generated from a 3.062-diameter circle, but confirm with the designer or original CAD before manufacture if edge opening size/form is critical.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 1, HIGH 1, MEDIUM 2
+   - [CRITICAL] OV004 (overview): The overview clearly shows 1x shell (Single flat rectangular sheet-metal plate forming the cover body., Overall part body.) but the build contains no matching feature.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: shell feature(s) — verify against the drawing
+   - [HIGH] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (front, side): The side/profile view contains small projected interruptions corresponding generally to face features, but it does not clearly distinguish all seven holes from the semicircular edge cutout at this scan quality. Recommendation: Use the explicit front-view '.218 DR. THRU 7 HOLES' callout as governing, and inspect the original drawing if individual side-view projection marks are needed for verification.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front, bill_of_materials): The weather-stripping BOM specifies 23 inches, but the dashed inset path is approximately a four-sided rectangle whose full perimeter appears substantially longer than 23 inches; the exact strip start/stop and governed sides are not explicitly shown. Recommendation: Verify whether the dashed line denotes the complete strip path, only selected sides, or a reference boundary; obtain an assembly/application note or revised detail specifying strip routing, start/stop points, joints, and orientation.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-003 (overview_analysis): CROSS-VIEW CONFLICT (front): The bottom semicircular feature is labeled '3.062 DIA.' although only a semicircular opening is present at the plate edge; the intended full-circle construction center is shown, but no explicit 'R' or cutout wording is provided. Recommendation: Interpret it as a semicircular edge cutout generated from a 3.062-diameter circle, but confirm with the designer or original CAD before manufacture if edge opening size/form is critical.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+
+5. BUILD / MACRO FEATURE FAILURES
+   - none
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '156-C' finished NOT READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\29968fcc1275\A001641E_1\output\156-C
