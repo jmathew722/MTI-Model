@@ -232,6 +232,13 @@ def _prepare_and_extract(args) -> tuple[dict | None, dict | None]:
             f"  Tokens: in={usage.get('input_tokens', 0)} out={usage.get('output_tokens', 0)} "
             f"cache_read={usage.get('cache_read_input_tokens', 0)} -> ledger {ledger}"
         )
+        # Stage C/D/E — UNCONDITIONAL fixed-region high-resolution pass. Runs on
+        # every drawing (no confidence gate); re-reads each fixed region at
+        # near-native resolution and reconciles against this overview extraction,
+        # writing region-pass corrections back into `data` before Stage 2.5.
+        # Never blocks the run: any failure is a logged, non-fatal skip.
+        if getattr(args, "region_pass", "on") != "off" and args.drawing:
+            _run_region_pass_into(data, args, part, model)
         return data, overview_analysis
     except EnvironmentError as e:
         console.print(f"[red]Extraction failed (configuration):[/red] {e}")
@@ -242,6 +249,37 @@ def _prepare_and_extract(args) -> tuple[dict | None, dict | None]:
         # failures surface as the SDK's own exception types. Present cleanly.
         console.print(f"[red]Extraction failed (API error):[/red] {type(e).__name__}: {e}")
     return None, overview_analysis
+
+
+def _run_region_pass_into(data: dict, args, part: str, model: str) -> None:
+    """Run the unconditional fixed-region high-res pass over the source drawing
+    and fold its reconciled corrections back into ``data`` in place. The region
+    artifacts (master/sent rasters, regions/ crops + sidecars, manifest, merge
+    log) land in the part's output subfolder. Exception-safe: this stage can only
+    improve the extraction, never break the run."""
+    try:
+        from pipeline.macro_generator import _safe_name
+        from pipeline.region_extraction import apply_resolved, run_region_extraction
+        from pipeline.usage_log import record_run
+
+        part_out = Path(args.output) / _safe_name(part)
+        rp_usage: dict[str, int] = {}
+        res = run_region_extraction(
+            Path(args.drawing), overview=data, out_dir=part_out,
+            part=_safe_name(part), page=args.page,
+            keep_regions=getattr(args, "keep_regions", "all"),
+            lessons_path=Path(args.output) / "lessons_learned.jsonl",
+            usage_out=rp_usage, overlay=bool(getattr(args, "debug", False)))
+        changed = apply_resolved(data, res.merge.resolved)
+        if rp_usage:
+            record_run(Path(args.output), part, model, rp_usage, stage="region_pass")
+        note = " — HUMAN REVIEW needed" if res.merge.needs_review else ""
+        console.print(
+            f"  [cyan]Region pass:[/cyan] {res.api_calls} region call(s) over "
+            f"{len(res.regions)} region(s); {changed} field(s) corrected{note}")
+    except Exception as e:  # never fatal
+        console.print(f"  [yellow]Region pass skipped (non-fatal): "
+                      f"{type(e).__name__}: {e}[/yellow]")
 
 
 def _augment_holes(raw: dict, source_path: Path, page: int) -> dict:
@@ -705,6 +743,19 @@ def main() -> int:
         action="store_true",
         help="Do NOT copy the outputs to ~/Downloads/SolidWorksModel_Parts. By "
         "default the final step gathers all part outputs there.",
+    )
+    parser.add_argument(
+        "--region-pass", choices=["on", "off"], default="on",
+        help="Unconditional fixed-region high-resolution extraction pass (default "
+        "on): after the full-page overview extraction, re-read every fixed "
+        "overlapping region of the sheet at near-native resolution and reconcile. "
+        "Runs on every drawing regardless of confidence — 'off' disables it "
+        "entirely (removes the second-look reliability layer).",
+    )
+    parser.add_argument(
+        "--keep-regions", choices=["all", "conflicts-only", "none"], default="all",
+        help="Which region crop images to keep on disk (the per-region extraction "
+        "sidecars are always kept as the field->region audit trail). Default all.",
     )
     args = parser.parse_args()
 

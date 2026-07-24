@@ -209,6 +209,33 @@ def _overview_confidence(overall: float, unclear: bool) -> str:
     return "LOW"
 
 
+def apply_resolved(overview: dict, resolved: dict[str, Any]) -> int:
+    """Write the merge's resolved values back onto the overview DrawingData dict,
+    IN PLACE, so region-pass corrections flow into Stage 2.5 and the build. The
+    inverse of :func:`flatten_overview`: only the known, safely-mappable paths
+    are applied (``dimensions.<id>.value``, ``hole_callouts.<id>.qty|diameter``);
+    region-only additions to unknown paths are left for review rather than
+    forced into the strict schema. Returns the number of fields changed — 0 when
+    every field agreed, so an all-agree drawing's extraction (and its build
+    plan) is untouched."""
+    dims = {d.get("id"): d for d in overview.get("dimensions", []) or []}
+    holes = {h.get("id"): h for h in overview.get("hole_callouts", []) or []}
+    changed = 0
+    for fp, val in resolved.items():
+        parts = fp.split(".")
+        if len(parts) == 3 and parts[0] == "dimensions" and parts[2] == "value":
+            d = dims.get(parts[1])
+            if d is not None and d.get("value") != val:
+                d["value"] = val
+                changed += 1
+        elif len(parts) == 3 and parts[0] == "hole_callouts" and parts[2] in ("qty", "diameter"):
+            h = holes.get(parts[1])
+            if h is not None and h.get(parts[2]) != val:
+                h[parts[2]] = val
+                changed += 1
+    return changed
+
+
 def flatten_overview(overview: dict) -> list[dict]:
     """DrawingData dict -> a flat list of comparable field records
     ``{field_path, value, confidence}`` (the space the region pass reconciles

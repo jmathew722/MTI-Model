@@ -240,3 +240,20 @@ def test_ledger_appends_per_field_and_summary(tmp_path):
 def test_default_extract_fn_is_callable_without_network(tmp_path):
     fn = default_region_extract_fn(model="claude-sonnet-5", cache_dir=tmp_path, usage_out={})
     assert callable(fn)
+
+
+def test_apply_resolved_writes_overrides_back_and_noop_on_agreement():
+    from pipeline.region_extraction import apply_resolved
+
+    ov = _overview(hole_qty=5, dims=[{"id": "D001", "value": 4.0, "applies_to": "length"}])
+    # A region_override corrected the hole count 5 -> 6 and confirmed D001 == 4.0.
+    resolved = {"hole_callouts.H001.qty": 6, "dimensions.D001.value": 4.0,
+                "features.new_thing": 9}   # unknown path -> not applied
+    changed = apply_resolved(ov, resolved)
+    assert changed == 1                                   # only the qty differed
+    assert ov["hole_callouts"][0]["qty"] == 6
+    assert ov["dimensions"][0]["value"] == 4.0
+    # A fully-agreeing resolution changes nothing (criterion: agreement leaves the
+    # extraction — and thus the build plan — untouched).
+    assert apply_resolved(ov, {"dimensions.D001.value": 4.0,
+                               "hole_callouts.H001.qty": 6}) == 0
