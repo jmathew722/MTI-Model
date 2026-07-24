@@ -31,3 +31,4 @@ token_usage_log.jsonl
 .DS_Store
 Thumbs.db
 third_party/
+reference/
