@@ -95,7 +95,37 @@ RUNS: dict[str, dict] = {}
 
 
 def _has_api_key() -> bool:
+    """True when the ACTIVE provider's key is set — OPENAI_API_KEY when
+    AI_PROVIDER=openai, else ANTHROPIC_API_KEY. So the run gates and the API-
+    status pill reflect the model that will actually run."""
+    from pipeline.ai_provider import get_provider
+
+    if get_provider() == "openai":
+        return bool(os.getenv("OPENAI_API_KEY", "").strip())
     return bool(os.getenv("ANTHROPIC_API_KEY", "").strip())
+
+
+# Friendly names for the masthead "Extraction engine" label.
+_ENGINE_LABELS = {
+    "gpt-5.6": "ChatGPT (GPT-5.6)", "gpt-5.6-sol": "ChatGPT (GPT-5.6 Sol)",
+    "gpt-5.6-terra": "ChatGPT (GPT-5.6 Terra)", "gpt-5.6-luna": "ChatGPT (GPT-5.6 Luna)",
+    "claude-sonnet-5": "Claude Sonnet 5", "claude-sonnet-4-6": "Claude Sonnet 4.6",
+    "claude-opus-4-8": "Claude Opus 4.8",
+}
+
+
+def _active_engine() -> dict:
+    """The provider + model actually in effect, with a display label — so the
+    UI masthead shows which engine is running instead of a hardcoded string."""
+    from pipeline.ai_provider import default_model, get_provider
+
+    provider = get_provider()
+    model = (os.getenv("EXTRACTION_MODEL") or default_model()).strip()
+    label = _ENGINE_LABELS.get(model)
+    if label is None:
+        label = ("ChatGPT " if provider == "openai" else "Claude ") + model
+    return {"provider": provider, "model": model, "label": label,
+            "key_present": _has_api_key()}
 
 
 def _samples() -> list[str]:
@@ -303,7 +333,7 @@ def pdf_worker_js():
 
 @app.get("/api/status")
 def status():
-    return {"live": _has_api_key(), "samples": _samples()}
+    return {"live": _has_api_key(), "samples": _samples(), "engine": _active_engine()}
 
 
 @app.get("/api/samples")

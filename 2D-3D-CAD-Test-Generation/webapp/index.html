@@ -807,7 +807,7 @@
   </div>
   <div class="spacer"></div>
   <div class="titleblock">
-    <div class="tb-cell"><span class="tb-k">Extraction engine</span><span class="tb-v">ChatGPT (GPT-5.6)</span></div>
+    <div class="tb-cell"><span class="tb-k">Extraction engine</span><span class="tb-v" id="engine-label">…</span></div>
     <div class="tb-cell"><span class="tb-k">Deliverables</span><span class="tb-v">.SLDPRT · .STL · VBA</span></div>
     <div class="tb-cell"><span class="tb-k">API status</span><span class="pill" id="key-pill"><span class="dot"></span><span id="key-txt">checking…</span></span></div>
   </div>
@@ -1266,6 +1266,14 @@ fetch('/api/status').then(r => r.json()).then(s => {
   const pill = document.getElementById('key-pill'), txt = document.getElementById('key-txt');
   if (s.live) { pill.classList.add('live'); txt.textContent = 'API key set — live extraction'; }
   else { pill.classList.add('demo'); txt.textContent = 'No API key — use Run demo'; }
+  // Masthead engine label reflects the ACTIVE provider/model (not a hardcoded
+  // string), so switching AI_PROVIDER between OpenAI and Claude is visible here.
+  const eng = document.getElementById('engine-label');
+  if (eng && s.engine && s.engine.label) {
+    eng.textContent = s.engine.label;
+    eng.title = `provider: ${s.engine.provider} · model: ${s.engine.model}`
+              + (s.engine.key_present ? '' : ' · KEY MISSING');
+  }
   const sel = document.getElementById('demo-sample');
   (s.samples || []).forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = 'sample ' + n; sel.appendChild(o); });
   if (!(s.samples || []).length) { document.getElementById('demo-btn').disabled = true; sel.style.display = 'none'; }
