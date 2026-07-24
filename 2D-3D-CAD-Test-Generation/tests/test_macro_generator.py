@@ -192,27 +192,30 @@ class TestMachineRobustness:
 
 
 class TestProhibitedAndDeferred:
-    def test_shell_skipped_and_flagged(self, package):
+    def test_shell_is_no_longer_prohibited(self, package):
+        """Phase 3a (2026-07-24): shell was promoted from prohibited to a real
+        builder, so F004 is NOT skipped and gets a numbered shell macro (not a
+        MANUAL step). Here D003 is a 'height' dim, not a clean wall thickness, so
+        the shell emits its needs_review skeleton — still a real dispatch branch,
+        never the old skipped_prohibited path."""
         pkg, _ = package
-        assert [s.feature_id for s in pkg.skipped] == ["F004"]
+        assert "F004" not in [s.feature_id for s in pkg.skipped]
         plan = json.loads(pkg.build_plan_json.read_text())
-        assert plan["skipped_prohibited"] == ["F004"]
-        skipped = [s for s in plan["steps"] if s["status"] == "skipped_prohibited"]
-        assert skipped and "SKIPPED" in skipped[0]["notes"]
+        assert plan["skipped_prohibited"] == []
+        # No MANUAL step macro is generated for the shell any more.
+        assert not list(pkg.macros_dir.glob("*F004*MANUAL*.vba"))
 
-    def test_manual_step_macro_generated_for_shell(self, package):
-        """A prohibited feature is never silently dropped: it gets a numbered
-        MANUAL-step macro (no geometry, instructions + WARN log entry)."""
+    def test_shell_macro_generated_for_f004(self, package):
+        """F004 gets a numbered shell macro (real InsertFeatureShell when a wall
+        thickness exists, else a needs_review skeleton). Never silently dropped."""
         pkg, _ = package
-        manual = list(pkg.macros_dir.glob("*F004*MANUAL*.vba"))
-        assert len(manual) == 1
-        text = manual[0].read_text()
-        assert "MANUAL STEP" in text
+        shell = list(pkg.macros_dir.glob("*F004*.vba"))
+        assert len(shell) == 1
+        text = shell[0].read_text()
         assert "LogResult" in text
-        assert "NO GEOMETRY" in text
-        # The skipped step now references its manual macro file.
-        skipped = [s for s in pkg.skipped if s.feature_id == "F004"]
-        assert skipped and skipped[0].macro_file == manual[0].name
+        # This fixture has no thickness dim, so the skeleton branch fires.
+        assert "shell" in text.lower()
+        assert "MANUAL STEP" not in text
 
     def test_fillet_deferred_to_last_numbered_macro(self, package):
         pkg, _ = package

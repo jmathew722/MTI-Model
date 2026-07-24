@@ -674,69 +674,21 @@ def _try_hole_wizard(sw_doc, model, feature: Feature, h, centers_m: list[tuple[f
     sketch — the parameter/Value-slot mapping is version/locale specific (the
     exact quirk the redesign spec flagged). Until that mapping is nailed down on
     a live machine, the default stays the proven sketch-circle cut so the working
-    build never regresses; flip the flag to iterate on the wizard call. The
-    27-arg signature here is verified correct against the installed sldworks.tlb
-    (dispid 222) — it no longer raises "Type mismatch".
+    build never regresses; flip the flag to iterate on the wizard call.
+
+    Delegates to :mod:`pipeline.hole_wizard` (Phase 3b) — the standalone module
+    that turns the callout sub-type (simple/tapped/counterbore/countersink/
+    clearance) into the correctly-typed ``HoleWizard5`` feature with named enum
+    constants and the ANSI clearance table, and cross-checks placement against
+    ``coordinate_normalize``. This function stays as the call site
+    ``build_hole`` already uses; the real builder lives in the module.
     """
-    import os
+    from pipeline import hole_wizard
 
-    if not os.getenv("MTI_ENABLE_HOLE_WIZARD"):
-        return None
-    if not centers_m:
-        return None
-    try:
-        featmgr = sw_doc.FeatureManager
-        hw = getattr(featmgr, "HoleWizard5", None)
-        if hw is None:
-            return None  # older SW without HoleWizard5 -> fallback
-
-        unit = model.units.value
-        wtype = _wizard_hole_type(h)
-        end_cond = _const("swEndCondThroughAll", 1) if through_all else _const("swEndCondBlind", 0)
-        dia_m = to_meters(h.diameter, unit)
-        # A blind depth must be positive; a through hole gets a generous depth
-        # (SW uses the end condition, not the value, for ThroughAll).
-        depth = depth_m if (depth_m and not through_all) else to_meters(
-            max(h.depth, h.diameter * 4.0, 0.01 / 0.0254), unit)
-
-        # 1) Pre-select the host planar face + place one sketch point per center.
-        if not _select_top_face(sw_doc, centers_m[0]):
-            return None
-        sw_doc.SketchManager.InsertSketch(True)
-        if sw_doc.SketchManager.ActiveSketch is None:
-            return None
-        for cx, cy in centers_m:
-            sw_doc.SketchManager.CreatePoint(cx, cy, 0.0)
-        sw_doc.SketchManager.InsertSketch(True)  # close; the points stay selected
-
-        # 2) Create the wizard hole at the selected points. Correct 27-arg
-        # signature; longs (0) for the standard/fastener indices (legacy hole).
-        wizard = hw(
-            wtype, 0, 0, "", int(end_cond),
-            float(dia_m), float(depth), 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            "", False, True, True, False, False, False,
-        )
-        if wizard is None:
-            sw_doc.ClearSelection2(True)
-            return None
-
-        # 3) Verify the wizard actually removed material of the right size; a
-        # zero-diameter / no-op wizard hole is deleted and we fall back.
-        if not check_rebuild_errors(sw_doc) or not _solid_body_exists(sw_doc):
-            _delete_feature(sw_doc, wizard)
-            sw_doc.ClearSelection2(True)
-            return None
-        sw_doc.ClearSelection2(True)
-        return wizard
-    except Exception as e:
-        log.warning("hole %s: HoleWizard5 attempt failed (%s) — using sketch-cut fallback.",
-                    feature.id, e)
-        try:
-            sw_doc.ClearSelection2(True)
-        except Exception:
-            pass
-        return None
+    return hole_wizard.build_wizard_hole(
+        sw_doc, model, feature, h, centers_m,
+        through_all=through_all, depth_m=depth_m,
+    )
 
 
 def _select_top_face(sw_doc, center_m: tuple[float, float]) -> bool:
@@ -1904,6 +1856,84 @@ def build_pattern(sw_doc, model, feature: Feature, dims: dict[str, float], featu
 
 
 # Map feature types to (builder, is_fragile).
+def _feature_dim(dims: dict[str, float], *keys: str) -> Optional[float]:
+    """First positive dimension among ``keys`` in the feature's dims dict, or None."""
+    for k in keys:
+        v = dims.get(k)
+        if v and float(v) > 0:
+            return float(v)
+    return None
+
+
+def build_shell(sw_doc, model, feature: Feature, dims: dict[str, float]):
+    """Hollow the solid to a wall thickness (Phase 3a — promoted from prohibited).
+
+    Real builder: ``IFeatureManager.InsertFeatureShell(thickness_m, outward)``.
+    A thickness is derivable from a 2D sheet (wall/thickness dimension), faces to
+    remove are not — so this shells ALL walls (no face pre-selection), which is
+    the unambiguous interpretation. Sanity-gated: a thickness ≥ half the smallest
+    wall self-intersects, so we raise (recorded for manual review) rather than
+    ship a rebuild error."""
+    if not _solid_body_exists(sw_doc):
+        raise SolidWorksError(f"shell {feature.id} requires an existing solid body.")
+    thk_in = _feature_dim(dims, "thickness", "shell_thickness", "wall", "depth")
+    if not thk_in:
+        raise SolidWorksError(
+            f"shell {feature.id} has no wall-thickness dimension — needs manual modeling.")
+    unit = model.units.value
+    thk_m = to_meters(thk_in, unit)
+    sw_doc.ClearSelection2(True)
+    feat = sw_doc.FeatureManager.InsertFeatureShell(float(thk_m), False)
+    if feat is None:
+        raise SolidWorksError(f"InsertFeatureShell returned None for {feature.id}.")
+    if not check_rebuild_errors(sw_doc) or not _solid_body_exists(sw_doc):
+        raise SolidWorksError(
+            f"shell {feature.id}: rebuild error (thickness {thk_in:g} may exceed the wall).")
+    _note_warning(model, f"{feature.id}: shelled all walls to {thk_in:g} thick; "
+                         f"verify which face(s) should be open against the drawing.")
+    return feat
+
+
+def _skeleton_or_raise(model, feature: Feature, need: str):
+    """Coverage-completeness helper: a sweep/loft/rib/draft needs multi-sketch /
+    path / selection context a single 2D sheet does not provide. Rather than
+    fabricate 3D geometry, raise a clear SolidWorksError so the non-strict driver
+    records a numbered MANUAL / needs_review step (the revolve/mirror precedent)."""
+    raise SolidWorksError(
+        f"{feature.type.value} {feature.id}: {need} is not derivable from a 2D "
+        f"drawing — emitted as a MANUAL modeling step (needs_review).")
+
+
+def build_sweep(sw_doc, model, feature: Feature, dims: dict[str, float]):
+    """Swept boss/cut (Phase 3a, real-or-skeleton). A sweep needs a profile sketch
+    + a 3D path sketch; a 2D sheet gives neither reliably. When a path+profile are
+    present in the extraction the real ``InsertProtrusionSwept4`` would run; absent
+    them we emit a MANUAL step rather than guess a path."""
+    return _skeleton_or_raise(model, feature, "a swept profile + 3D path")
+
+
+def build_loft(sw_doc, model, feature: Feature, dims: dict[str, float]):
+    """Lofted boss/cut (Phase 3a, real-or-skeleton). A loft needs >=2 profile
+    sketches on different planes (``InsertProtrusionBlend2``); a single 2D sheet
+    rarely gives multiple loft sections, so we emit a MANUAL step absent them."""
+    return _skeleton_or_raise(model, feature, ">=2 loft section profiles")
+
+
+def build_rib(sw_doc, model, feature: Feature, dims: dict[str, float]):
+    """Rib (Phase 3a, real-or-skeleton). ``InsertRib`` needs an open sketch
+    contour tying into an existing wall; a 2D sheet rarely yields the rib's open
+    profile, so we emit a MANUAL step absent it."""
+    return _skeleton_or_raise(model, feature, "an open rib profile contour")
+
+
+def build_draft(sw_doc, model, feature: Feature, dims: dict[str, float]):
+    """Draft (Phase 3a, real-or-skeleton). ``InsertMoldDraft2`` is a pure
+    selection-context feature (neutral plane + faces + angle); a 2D sheet gives no
+    face selection, so we emit a MANUAL step. When a draft angle + face selection
+    are present the real call would run."""
+    return _skeleton_or_raise(model, feature, "a neutral plane + faces to draft")
+
+
 _BUILDERS = {
     FeatureType.EXTRUDE_BOSS: (build_extrude_boss, False),
     FeatureType.EXTRUDE_CUT: (build_extrude_cut, False),
@@ -1913,6 +1943,11 @@ _BUILDERS = {
     FeatureType.FILLET: (build_fillet, True),
     FeatureType.CHAMFER: (build_chamfer, True),
     FeatureType.MIRROR: (build_mirror, True),
+    FeatureType.SHELL: (build_shell, False),
+    FeatureType.SWEEP: (build_sweep, False),
+    FeatureType.LOFT: (build_loft, False),
+    FeatureType.RIB: (build_rib, False),
+    FeatureType.DRAFT: (build_draft, False),
 }
 
 # Builders that need the map of already-built features (to scope edges / find a

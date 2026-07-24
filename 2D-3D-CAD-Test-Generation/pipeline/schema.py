@@ -65,6 +65,15 @@ class FeatureType(str, Enum):
     PATTERN = "pattern"
     MIRROR = "mirror"
     SHELL = "shell"
+    # Coverage-completeness feature types (Phase 3a, 2026-07-24). Each has a real
+    # builder on both engine paths that builds when the required profile/path/
+    # selection data is present in the extraction, else emits a numbered MANUAL /
+    # needs_review step — never a wrong-geometry guess (the revolve/mirror
+    # "real-or-skeleton" precedent). Additive: old JSONs keep loading.
+    SWEEP = "sweep"
+    LOFT = "loft"
+    RIB = "rib"
+    DRAFT = "draft"
 
 
 # Aliases Claude (or a hand-written fixture) might emit, mapped to canonical names.
@@ -94,6 +103,20 @@ _FEATURE_ALIASES = {
     "circular pattern": "pattern",
     "linear pattern": "pattern",
     "bolt_circle": "pattern",
+    # Coverage-completeness sub-kinds → canonical types (Phase 3a). Boss/cut
+    # variants collapse to the single feature type; the additive-vs-subtractive
+    # sense is decided downstream from the extracted operation, not the name.
+    "sweep_boss": "sweep",
+    "sweep_cut": "sweep",
+    "swept_boss": "sweep",
+    "swept_cut": "sweep",
+    "loft_boss": "loft",
+    "loft_cut": "loft",
+    "lofted_boss": "loft",
+    "blend": "loft",
+    "rib_feature": "rib",
+    "draft_feature": "draft",
+    "mold_draft": "draft",
 }
 
 
@@ -177,6 +200,12 @@ class HoleType(str, Enum):
     COUNTERSINK = "countersink"
     SPOTFACE = "spotface"
     TAPPED = "tapped"
+    # Standard-fastener clearance hole (Phase 3c, 2026-07-24). The drill diameter
+    # comes from the ANSI Inch/Metric clearance table in hole_wizard_constants
+    # when a fastener size is named; additive — the wizard builder also INFERS a
+    # clearance hole from a thru/blind callout that names a fastener, so old JSONs
+    # without this member still route correctly.
+    CLEARANCE = "clearance"
 
 
 class PatternKind(str, Enum):

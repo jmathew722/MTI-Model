@@ -322,17 +322,10 @@ Sub Step01_F001()
     WriteMacroResult "F001_Base_plate", "PASS", ""
 End Sub
 
-Sub Step02_F004_Manual()
-    ' ============ MANUAL STEP - NO GEOMETRY IS CREATED HERE ============
-    ' Feature F004 (shell) cannot be scripted reliably.
-    ' Build it by hand in SolidWorks using the drawing and these values:
-    '   height = 0.5 (drawing units)
-    ' Description: Shell body
-    ' When done, re-run this macro so the build log records the step.
-    MsgBox "MANUAL STEP 02_F004: build feature F004 (shell) by hand." & vbCrLf & _
-        "Shell body" & vbCrLf & "See this macro's comments for the extracted values.", _
-        vbExclamation, "Manual step required - F004"
-    LogResult "WARN", "02_F004", "F004 (shell) requires MANUAL modeling - no geometry created"
+Sub Step02_F004()
+    ' Feature F004 (shell): no wall-thickness dimension extracted.
+    MsgBox "Feature F004 (shell) needs a wall thickness - build manually.", vbExclamation
+    LogResult "WARN", "02_F004", "F004 shell: no thickness"
 End Sub
 
 Sub Step03_F002()
@@ -537,7 +530,7 @@ Sub main()
     Step00_Setup
     Step01a_ReferenceGeometry
     Step01_F001
-    Step02_F004_Manual
+    Step02_F004
     Step03_F002
     Step04_FilletsChamfers
     StepZZ_FinalVerify

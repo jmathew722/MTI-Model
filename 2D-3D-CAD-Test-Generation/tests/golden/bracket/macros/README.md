@@ -35,5 +35,6 @@ Notes
   (cosmetic threads, countersinks, revolves) — values are in the comments.
 - If a feature's position was not readable from the drawing, the macro says
   `POSITION ASSUMED` — verify against the drawing before trusting the model.
-- Check `GOLDEN-1-RevA_build_plan.json` for the full step list, including anything
-  skipped as prohibited (lofts/sweeps/shells are never generated).
+- Check `GOLDEN-1-RevA_build_plan.json` for the full step list. Shells build for real;
+  sweeps/lofts/ribs/drafts emit a needs_review skeleton (they need path/section
+  data a 2D sheet does not supply) — never a fabricated 3D guess.

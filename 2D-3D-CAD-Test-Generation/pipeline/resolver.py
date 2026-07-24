@@ -1827,6 +1827,40 @@ def _resolve_hole_position_flag(hole: dict, fid_note: str) -> Optional[dict]:
     }
 
 
+def _callout_count_flags(resolved: dict) -> list[dict]:
+    """CRITICAL flags where a hole callout's ``(N)`` multiplier disagrees with the
+    number of hole positions actually dimensioned on the sheet (Phase 3d).
+
+    Uses the pure :func:`pipeline.hole_wizard.reconcile_callout_count`. Only fires
+    when EXPLICIT ``instance_positions`` exist and their count differs from
+    ``qty`` — a deterministic drawing-vs-callout disagreement (the A050211E flange
+    5-vs-6), never the "positions derived from a bolt-circle" case (where the
+    count is not independently observable). The flag carries the standard shape
+    the engineering review + human_assist queue already consume."""
+    from pipeline.hole_wizard import reconcile_callout_count
+
+    flags: list[dict] = []
+    for hole in resolved.get("hole_callouts", []) or []:
+        positions = hole.get("instance_positions") or []
+        if len(positions) < 2:
+            continue  # no independently countable layout to compare against
+        conflict = reconcile_callout_count(
+            hole.get("qty"), len(positions), hole.get("id", "?"))
+        if conflict is None:
+            continue
+        flags.append({
+            "dimension_id": conflict["feature_id"],
+            "flag_tier": "CRITICAL",
+            "human_note": conflict["human_note"],
+            "macro_behavior": behavior_for_tier("CRITICAL"),
+            "resolved_by_tier": TIER_PER_VIEW,
+            "source": "callout_vs_count",
+            "gate_question": conflict["gate_question"],
+            "candidates": conflict["candidates"],
+        })
+    return flags
+
+
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
@@ -2084,6 +2118,15 @@ def resolve_extraction(raw: dict,
         _classify_hole_groups(resolved, model, result)
     except Exception as e:  # provenance is additive — never break a run
         log.warning("hole-group classification failed (non-fatal): %s", e)
+    # Phase 3d (2026-07-24): callout-multiplier vs countable-instances
+    # reconciliation. When a callout says "(N)" but a DIFFERENT number of hole
+    # positions is actually dimensioned (the A050211E 5-vs-6 flange), that is a
+    # build-blocking conflict — flag it CRITICAL through the SAME escalation path
+    # (engineering review + human_assist queue), never silently pick a number.
+    try:
+        result.flags.extend(_callout_count_flags(resolved))
+    except Exception as e:  # additive — never break a run
+        log.warning("callout-count reconciliation failed (non-fatal): %s", e)
     # Revolve->circle+extrude conversions that approximated a stepped/tapered
     # profile as a bounding cylinder surface as MEDIUM review items.
     result.flags.extend(_revolve_flags)

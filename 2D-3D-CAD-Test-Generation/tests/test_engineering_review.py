@@ -46,12 +46,20 @@ class TestBuildReviewItems:
         ranks = [SEVERITY_ORDER.index(i["severity"]) for i in items]
         assert ranks == sorted(ranks)
 
-    def test_prohibited_feature_is_critical(self, tmp_path):
+    def test_shell_is_review_item_not_prohibited(self, tmp_path):
+        """Phase 3a (2026-07-24): shell is a real builder now. The bracket F004
+        shell has only a 'height' dim (no clean wall thickness), so it surfaces as
+        a needs_review shell step — a real dispatch branch — rather than the old
+        prohibited/MANUAL CRITICAL item. It is still surfaced, never dropped."""
         resolution, pkg = _run(tmp_path, bracket_drawing())
         items = build_review_items(resolution=resolution, pkg=pkg)
         f004 = [i for i in items if i["id"] == "F004"]
-        assert f004 and f004[0]["severity"] == "CRITICAL"
-        assert "MANUAL" in f004[0]["decision"].upper()
+        assert f004, "the shell must still appear in the review"
+        # It is a generated shell macro (needs_review), NOT the old prohibited /
+        # skipped MANUAL-step item.
+        assert "F004" not in [s.feature_id for s in pkg.skipped]
+        assert "shell" in f004[0]["decision"].lower()
+        assert "generated" in f004[0]["decision"].lower()
 
     def test_com_skipped_feature_is_critical(self):
         items = build_review_items(build_skipped=[("F002", "hole", "degenerate data")])

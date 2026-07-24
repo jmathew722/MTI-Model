@@ -318,6 +318,35 @@ def generate_assist_queue(
                                        fl.get("flag_tier", "CRITICAL")),
                 created_at=now, status=PENDING))
 
+        # 2b) Callout-vs-count conflicts (Phase 3d): a hole callout multiplier that
+        #     disagrees with the countable dimensioned positions (A050211E 5-vs-6).
+        #     Build-blocking; the flag already carries a ready-to-answer gate
+        #     question + the two candidate counts. No construction method can pick
+        #     the count, so method_experiments is auto-satisfied.
+        for fl in (resolution.flags if resolution else []):
+            if fl.get("source") != "callout_vs_count":
+                continue
+            fid = fl.get("feature_id") or fl.get("dimension_id") or "?"
+            if any(q.feature_id == fid for q in questions):
+                continue
+            kind = KIND_CONFLICTING_VIEWS
+            stages = {"resolver_plausibility", "typ_derivation", "correction_loop",
+                      "method_experiments"}
+            if not escalation_eligible(stages, kind):
+                continue
+            cands = [Candidate(value=c, basis="callout_or_count", confidence=0.5)
+                     for c in (fl.get("candidates") or [])]
+            questions.append(Question(
+                question_id=_qid(part, fid, kind), part=part, feature_id=fid, kind=kind,
+                question_text=(fl.get("gate_question") or fl.get("human_note", ""))[:400],
+                default_if_unanswered=(cands[-1].value if cands else
+                                       "ships with the dimensioned position count"),
+                candidates=cands,
+                region_crop=(crop_fn(fid, "") if crop_fn else ""),
+                automated_attempts=[fl.get("human_note", "")],
+                priority=_priority_for(kind, "", fanout.get(fid, 0), "CRITICAL"),
+                created_at=now, status=PENDING))
+
         # 3) Reconciliation unresolved items (already through resolver + loop).
         for u in (getattr(reconciliation_result, "unresolved", []) or []):
             ud = u.as_dict() if hasattr(u, "as_dict") else dict(u)

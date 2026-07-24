@@ -31,8 +31,10 @@ Generation discipline:
   * One macro per feature; each appends PASS/FAIL to ``logs/build_log.txt``
     (path derived from the macro's own location) and stops with a message box on
     failure — never build on a broken state.
-  * PROHIBITED feature types (loft, sweep, shell, …) are never generated —
-    they're flagged in the build plan and skipped.
+  * Shell builds for real (InsertFeatureShell); sweep/loft/rib/draft are
+    real-or-skeleton — a needs_review MANUAL step when a 2D sheet can't supply
+    the path/sections/profile (Phase 3a). An unsupported type still gets a
+    numbered MANUAL step; nothing is silently dropped.
   * Holes are generated as exact circle sketches + a single cut (positions baked
     in), which is far more robust than scripted Hole Wizard or pattern features.
     Counterbores get a second concentric blind cut. Tapped holes get a cosmetic-
@@ -101,9 +103,21 @@ SUPPORTED = {
     FeatureType.MIRROR,
     FeatureType.THREAD,   # cosmetic thread only (TODO-marked)
     FeatureType.REVOLVE,  # real revolve when a profile exists, else skeleton + needs_review
+    FeatureType.SHELL,    # real shell (Phase 3a — promoted from prohibited)
+    # Coverage-completeness types (Phase 3a): real-or-skeleton, matching revolve.
+    # A single 2D sheet cannot supply a sweep path / loft sections / rib profile /
+    # draft face selection, so these emit a needs_review skeleton macro carrying
+    # the extracted values — never a fabricated 3D guess.
+    FeatureType.SWEEP,
+    FeatureType.LOFT,
+    FeatureType.RIB,
+    FeatureType.DRAFT,
 }
 # Schema types that are prohibited outright (plus anything not in SUPPORTED).
-PROHIBITED = {FeatureType.SHELL}
+# Empty since 2026-07-24: shell is now a real builder; sweep/loft/rib/draft are
+# real-or-skeleton. Nothing is silently dropped — an unsupported type still gets
+# a numbered MANUAL step below.
+PROHIBITED: set = set()
 
 
 class MacroGenerationError(Exception):
@@ -1571,6 +1585,62 @@ def _macro_revolve_skeleton(feature: Feature, step: str) -> str:
 """
 
 
+def _macro_shell(model: DrawingData, feature: Feature, step: str) -> tuple[str, dict[str, float], str]:
+    """Real shell macro (Phase 3a): hollow the solid to a wall thickness via
+    ``FeatureManager.InsertFeatureShell(thickness_m, False)``.
+
+    A thickness is derivable from the sheet; which face(s) to leave open is not,
+    so this shells ALL walls (no face pre-selection) — the unambiguous reading —
+    and flags it for verification. Returns (body, used_dims, notes)."""
+    dims = _dims_map(model, feature)
+    thk = 0.0
+    for k in ("thickness", "shell_thickness", "wall", "depth"):
+        if dims.get(k) and float(dims[k]) > 0:
+            thk = float(dims[k]); break
+    if thk <= 0:
+        return (
+            f"""    ' Feature {feature.id} (shell): no wall-thickness dimension extracted.
+    MsgBox "Feature {feature.id} (shell) needs a wall thickness - build manually.", vbExclamation
+    LogResult "WARN", "{step}", "{feature.id} shell: no thickness"
+""",
+            {}, "Shell has no thickness dimension — manual modeling (see macro).")
+    body = f"""    ' ---- SHELL body to wall thickness {_v(thk)} (drawing units), all walls ----
+    Dim swShell As SldWorks.Feature
+    swModel.ClearSelection2 True
+    Set swShell = swModel.FeatureManager.InsertFeatureShell({_v(thk)} * UNIT_FACTOR, False)
+    If swShell Is Nothing Then
+        LogResult "FAIL", "{step}", "{feature.id} InsertFeatureShell returned Nothing"
+    Else
+        swShell.Name = "{feature.id}_{_vba_name(feature.description)}"
+        LogResult "PASS", "{step}", "{feature.id} shelled to {_v(thk)} thick (verify open face)"
+    End If
+    swModel.ClearSelection2 True
+"""
+    return body, {"thickness": thk}, ("Shelled all walls; verify which face(s) "
+                                      "should be open against the drawing.")
+
+
+def _macro_coverage_skeleton(feature: Feature, step: str, need: str) -> str:
+    """needs_review skeleton for a sweep/loft/rib/draft (Phase 3a). A single 2D
+    sheet cannot supply the required ``need`` (path / sections / profile / face
+    selection), so no geometry is created — the extracted values + instructions
+    are carried for manual modeling (the revolve-skeleton precedent)."""
+    return f"""    ' TODO: VERIFY API CALL — {feature.type.value} {feature.id}
+    ' A {feature.type.value} needs {need}, which a 2D drawing does not supply.
+    ' Build manually in SolidWorks using the drawing. Description: {feature.description}
+    MsgBox "Feature {feature.id} ({feature.type.value}) requires manual modeling - see macro comments.", vbInformation
+    LogResult "WARN", "{step}", "{feature.id} {feature.type.value} requires manual modeling"
+"""
+
+
+_COVERAGE_NEED = {
+    FeatureType.SWEEP: "a swept profile + a 3D path sketch",
+    FeatureType.LOFT: "two or more section profiles on different planes",
+    FeatureType.RIB: "an open rib profile contour tying into a wall",
+    FeatureType.DRAFT: "a neutral plane + the faces to draft + an angle",
+}
+
+
 def _macro_revolve(model: DrawingData, feature: Feature, step: str) -> Optional[tuple[str, dict[str, float], str]]:
     """Real revolve macro from the extracted half-profile, or None when no profile
     was extracted (the caller then falls back to the manual skeleton).
@@ -2607,8 +2677,9 @@ Notes
   (cosmetic threads, countersinks, revolves) — values are in the comments.
 - If a feature's position was not readable from the drawing, the macro says
   `POSITION ASSUMED` — verify against the drawing before trusting the model.
-- Check `{name}_build_plan.json` for the full step list, including anything
-  skipped as prohibited (lofts/sweeps/shells are never generated).
+- Check `{name}_build_plan.json` for the full step list. Shells build for real;
+  sweeps/lofts/ribs/drafts emit a needs_review skeleton (they need path/section
+  data a 2D sheet does not supply) — never a fabricated 3D guess.
 """
 
 
@@ -3080,6 +3151,15 @@ def generate_macro_package(
                 else:
                     body = _macro_pattern_skeleton(model, feature, step_name)
                     status, notes = "needs_review", "Pattern left for manual application (see macro)."
+            elif feature.type == FeatureType.SHELL:
+                body, used, notes = _macro_shell(model, feature, step_name)
+                if not used:  # no thickness -> skeleton
+                    status = "needs_review"
+            elif feature.type in _COVERAGE_NEED:
+                body = _macro_coverage_skeleton(feature, step_name, _COVERAGE_NEED[feature.type])
+                status, notes = "needs_review", (
+                    f"{feature.type.value} needs {_COVERAGE_NEED[feature.type]} — "
+                    "manual modeling (see macro).")
             else:  # pragma: no cover — guarded by SUPPORTED above
                 raise MacroGenerationError(f"No builder for {feature.type.value}")
         except MacroGenerationError as e:
