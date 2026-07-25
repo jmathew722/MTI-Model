@@ -1,0 +1,52 @@
+LEARNING LOOP — 5051A
+============================================================
+Run:     2026-07-25 10:51:15
+Status:  READY
+Model:   gpt-5.6
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\2765b629df78\A091061M\output\5051A
+Fingerprint: b8ddf54c2d2c05ab
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — READY
+   - No gate failures (run reached READY).
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [CRITICAL] The drilled/counterbored feature is clear in plan and shown internally in the side profile, but no explicit THRU notation or drill depth is legible for the smaller hole; only the counterbore depth (.16 DP.) is stated. Treating the drilled portion as through based solely on the hidden-line appearance would be unsafe.
+       -> Verify the original CAD model, hole-wizard definition, or an unreduced source drawing for a THRU/DEPTH qualifier on the drilled #6 screw hole before manufacture.
+   - [HIGH] The upper view shows .311 with +.000/-.001 tolerance for one plate envelope direction, while the lower profile separately shows .312 on the thickness. The views are consistent only if these govern different axes, but projection labels are absent and the unusual near-equal dimensions can be confused.
+       -> Interpret .311 as the plan-view plate width and .312 as thickness, then verify against the native drawing/model before programming or inspection.
+   - [MEDIUM] The transverse hole-center position appears centered by graphics/centerline, but no explicit half-width dimension or symmetry note is visible.
+       -> Confirm whether the centerline is intended as a symmetry datum or obtain the missing transverse positional dimension from the CAD model/source drawing.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 2, HIGH 1, MEDIUM 1
+   - [CRITICAL] D007 (dimension): D007 decimal placement AMBIGUOUS among ['0.1495', '0.144', '0.138']; plausibility could not separate them. Kept 0.1495 as a best guess and the dependent feature is excluded from the build (Tab-3 assumption) — confirm the value and re-run.
+       decision: resolved value 0.1495
+       why: ambiguous multi candidate
+       affects: dimension D007
+   - [CRITICAL] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (top_view, side_profile): The drilled/counterbored feature is clear in plan and shown internally in the side profile, but no explicit THRU notation or drill depth is legible for the smaller hole; only the counterbore depth (.16 DP.) is stated. Treating the drilled portion as through based solely on the hidden-line appearance would be unsafe. Recommendation: Verify the original CAD model, hole-wizard definition, or an unreduced source drawing for a THRU/DEPTH qualifier on the drilled #6 screw hole before manufacture.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [HIGH] OV-002 (overview_analysis): INSPECTION-BALLOON REFERENCE (top_view, side_profile): The upper view shows .311 with +.000/-.001 tolerance for one plate envelope direction, while the lower profile separately shows .312 on the thickness. The views are consistent only if these govern different axes, but projection labels are absent and the unusual near-equal dimensions can be confused. Recognized as an inspection dimension balloon (circled numeral / 'IN.' value), attached to part metadata — NOT a competing geometry dimension, so it is excluded from dimension-conflict reconciliation.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-003 (overview_analysis): CROSS-VIEW CONFLICT (top_view): The transverse hole-center position appears centered by graphics/centerline, but no explicit half-width dimension or symmetry note is visible. Recommendation: Confirm whether the centerline is intended as a symmetry datum or obtain the missing transverse positional dimension from the CAD model/source drawing.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+
+5. BUILD / MACRO FEATURE FAILURES
+   - none
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '5051A' finished READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\2765b629df78\A091061M\output\5051A
