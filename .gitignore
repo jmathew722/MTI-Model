@@ -20,3 +20,6 @@
 .DS_Store
 Thumbs.db
 reference/
+
+# Accidental 1.4 GB nested repo copy (full checkout + venv/binaries) — never commit.
+MTI-Model_Joseph_Mathew/
