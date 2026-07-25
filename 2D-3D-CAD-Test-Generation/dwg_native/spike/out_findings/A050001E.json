@@ -1,0 +1,19 @@
+{
+  "file": "A050001E.DWG",
+  "load_errs": 0,
+  "import_ok": true,
+  "doc_type": 3,
+  "view_count": 1,
+  "native_display_dimension_count": 0,
+  "native_dim_value_samples_m": [],
+  "doc_annotation_histogram": {},
+  "dxf_entity_histogram": {
+    "LINE": 412,
+    "ARC": 19,
+    "CIRCLE": 76,
+    "INSERT": 4,
+    "HATCH": 34,
+    "MTEXT": 238
+  },
+  "numeric_dimension_objects_recovered": false
+}

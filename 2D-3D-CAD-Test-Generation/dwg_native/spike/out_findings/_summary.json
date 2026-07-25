@@ -1,0 +1,190 @@
+[
+  {
+    "file": "A050001E.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 412,
+      "ARC": 19,
+      "CIRCLE": 76,
+      "INSERT": 4,
+      "HATCH": 34,
+      "MTEXT": 238
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "A050021E.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 609,
+      "CIRCLE": 23,
+      "ARC": 13,
+      "INSERT": 32,
+      "HATCH": 71,
+      "MTEXT": 124
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "A050061E.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 304,
+      "CIRCLE": 4,
+      "ARC": 10,
+      "INSERT": 18,
+      "HATCH": 45,
+      "MTEXT": 51
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "A050181E.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 78,
+      "CIRCLE": 4,
+      "INSERT": 1,
+      "HATCH": 13,
+      "MTEXT": 12
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "A050401E.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 150,
+      "CIRCLE": 2,
+      "INSERT": 1,
+      "HATCH": 24,
+      "MTEXT": 20
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "A050511E.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 4,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 31,
+      "CIRCLE": 2,
+      "INSERT": 2,
+      "HATCH": 3,
+      "POINT": 3,
+      "DIMENSION": 4,
+      "MTEXT": 10
+    },
+    "numeric_dimension_objects_recovered": true
+  },
+  {
+    "file": "1722901E.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 204,
+      "CIRCLE": 5,
+      "INSERT": 15,
+      "HATCH": 22,
+      "MTEXT": 40
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "A090451M.dwg",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 707,
+      "ARC": 26,
+      "CIRCLE": 2,
+      "INSERT": 12,
+      "HATCH": 39,
+      "MTEXT": 41,
+      "TOLERANCE": 2
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "A050041M.DWG",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 206,
+      "CIRCLE": 4,
+      "INSERT": 6,
+      "HATCH": 19,
+      "MTEXT": 21
+    },
+    "numeric_dimension_objects_recovered": false
+  },
+  {
+    "file": "150291.dwg",
+    "load_errs": 0,
+    "import_ok": true,
+    "doc_type": 3,
+    "view_count": 1,
+    "native_display_dimension_count": 0,
+    "native_dim_value_samples_m": [],
+    "doc_annotation_histogram": {},
+    "dxf_entity_histogram": {
+      "LINE": 283,
+      "ARC": 196,
+      "CIRCLE": 4,
+      "INSERT": 1,
+      "HATCH": 13,
+      "MTEXT": 48
+    },
+    "numeric_dimension_objects_recovered": false
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "file": "1722901E.DWG",
+  "load_errs": 0,
+  "import_ok": true,
+  "doc_type": 3,
+  "view_count": 1,
+  "native_display_dimension_count": 0,
+  "native_dim_value_samples_m": [],
+  "doc_annotation_histogram": {},
+  "dxf_entity_histogram": {
+    "LINE": 204,
+    "CIRCLE": 5,
+    "INSERT": 15,
+    "HATCH": 22,
+    "MTEXT": 40
+  },
+  "numeric_dimension_objects_recovered": false
+}

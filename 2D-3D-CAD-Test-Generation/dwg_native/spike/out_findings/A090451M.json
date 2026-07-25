@@ -1,0 +1,20 @@
+{
+  "file": "A090451M.dwg",
+  "load_errs": 0,
+  "import_ok": true,
+  "doc_type": 3,
+  "view_count": 1,
+  "native_display_dimension_count": 0,
+  "native_dim_value_samples_m": [],
+  "doc_annotation_histogram": {},
+  "dxf_entity_histogram": {
+    "LINE": 707,
+    "ARC": 26,
+    "CIRCLE": 2,
+    "INSERT": 12,
+    "HATCH": 39,
+    "MTEXT": 41,
+    "TOLERANCE": 2
+  },
+  "numeric_dimension_objects_recovered": false
+}

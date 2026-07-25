@@ -1,0 +1,18 @@
+{
+  "file": "A050041M.DWG",
+  "load_errs": 0,
+  "import_ok": true,
+  "doc_type": 3,
+  "view_count": 1,
+  "native_display_dimension_count": 0,
+  "native_dim_value_samples_m": [],
+  "doc_annotation_histogram": {},
+  "dxf_entity_histogram": {
+    "LINE": 206,
+    "CIRCLE": 4,
+    "INSERT": 6,
+    "HATCH": 19,
+    "MTEXT": 21
+  },
+  "numeric_dimension_objects_recovered": false
+}
