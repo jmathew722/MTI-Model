@@ -257,3 +257,24 @@ def test_apply_resolved_writes_overrides_back_and_noop_on_agreement():
     # extraction — and thus the build plan — untouched).
     assert apply_resolved(ov, {"dimensions.D001.value": 4.0,
                                "hole_callouts.H001.qty": 6}) == 0
+
+
+# --------------------------------------------------------------------------- #
+# main.py glue (_run_region_pass_into) — the "never fatal" guarantee
+# --------------------------------------------------------------------------- #
+def test_run_region_pass_into_is_exception_safe(tmp_path):
+    """The single-drawing wiring in main.py must NEVER break a run: a region pass
+    over an unreadable/missing drawing is caught and logged, leaving the overview
+    ``data`` untouched (the stage can only improve the extraction, never fail it)."""
+    import types
+
+    import main
+
+    data = _overview()
+    before = json.dumps(data, sort_keys=True)
+    args = types.SimpleNamespace(
+        drawing=str(tmp_path / "does_not_exist.pdf"), output=str(tmp_path),
+        page=1, keep_regions="all", debug=False)
+    # Must not raise even though the source drawing cannot be rendered.
+    main._run_region_pass_into(data, args, "A050211E", "test-model")
+    assert json.dumps(data, sort_keys=True) == before
