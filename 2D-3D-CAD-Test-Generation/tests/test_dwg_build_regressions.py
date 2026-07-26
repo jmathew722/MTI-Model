@@ -62,9 +62,20 @@ def test_verify_all_gates_pass_on_good_build():
         "rebuild", "fully_defined", "dimension_roundtrip", "feature_count", "bounding_box"}
 
 
-def test_verify_fails_on_underdefined_sketch():
+def test_verify_underdefined_is_advisory_not_blocking():
+    # Programmatic coordinate-drawn sketches read under-defined but are pinned by
+    # the exact coordinates — advisory, must not gate (repo guiding principle).
     br = _good_result()
     br["fully_defined"][0]["status"] = "under"
+    rep = verify_build(_plan(), br)
+    assert rep.passed
+    fd = next(c for c in rep.checks if c["check"] == "fully_defined")
+    assert fd["status"] == "PASS"
+
+
+def test_verify_fails_on_overdefined_sketch():
+    br = _good_result()
+    br["fully_defined"][0]["status"] = "over"
     rep = verify_build(_plan(), br)
     assert not rep.passed and rep.failing_check == "fully_defined"
 

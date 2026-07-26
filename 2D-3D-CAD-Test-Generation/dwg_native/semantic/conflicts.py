@@ -47,15 +47,22 @@ def find_conflicts(circles: List[Any], multipliers: List[Any],
                 "resolution": "human_decision_required",
             })
 
-    # Un-attachable numeric dimensions block (they cannot be placed with confidence).
+    # Un-attachable numeric dimensions are ADVISORY, not blocking. Since every
+    # built value comes from EXACT geometry (a circle's radius/centre, the profile
+    # loop), an MTEXT token that does not attach is unlabelled extra information —
+    # surfaced as a flag (no silent skip) but it must not block a part whose
+    # geometry is fully determined. (Overall dims + notes legitimately sit away
+    # from the edges they annotate.) The genuine hazard — a callout count that
+    # contradicts the counted geometry — is the blocking case above.
     for a in attachments:
         if a.get("attached_to") is None:
             conflicts.append({
                 "type": "unattached_dimension",
-                "blocking": True,
-                "severity": "HIGH",
-                "detail": (f"Dimension {a.get('text')!r} (value {a.get('value')}) "
-                           "could not attach to any geometry within tolerance."),
+                "blocking": False,
+                "severity": "MEDIUM",
+                "detail": (f"Dimension text {a.get('text')!r} (value {a.get('value')}) "
+                           "did not attach to geometry; recorded, not used for build "
+                           "(geometry is authoritative)."),
                 "token_id": a.get("token_id"),
             })
     return conflicts

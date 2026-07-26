@@ -71,10 +71,19 @@ def import_dwg(session, dwg_path: str | Path, work_dir: str | Path) -> ImportRes
         raise ImportError_(f"LoadFile4 returned None (errs={errs.value}).")
 
     title = _call(doc, "GetTitle") or src.stem
-    dxf = work / (src.stem + "_swconv.dxf")
-    ok = _call(doc, "SaveAs3", str(dxf), 0, 0)
+    # SolidWorks SaveAs3 requires an ABSOLUTE Windows path (native separators);
+    # a relative/forward-slash path writes nothing and returns silently.
+    dxf = (work.resolve() / f"{src.stem}_swconv.dxf")
+    dxf_win = str(dxf).replace("/", "\\")
+    try:                                   # make sure the imported doc is active
+        sw.ActivateDoc3(title, False, 2, VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0))
+    except Exception:
+        pass
+    ok = _call(doc, "SaveAs3", dxf_win, 0, 0)
     if not dxf.is_file():
-        raise ImportError_("SolidWorks produced no DXF from the imported drawing.")
+        raise ImportError_(
+            f"SolidWorks produced no DXF from the imported drawing (saveas={ok}, "
+            f"path={dxf_win}).")
     notes.append(f"SolidWorks converted DWG -> DXF ({dxf.name}); saveas={ok}")
     return ImportResult(doc=doc, doc_title=title, dxf_path=dxf,
                         load_errors=int(errs.value or 0), notes=notes)

@@ -30,7 +30,9 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
     Returns a result dict: sldprt/stl paths, per-feature results, sketch
     fully-defined statuses, and the body bounding box (meters).
     """
-    from pipeline.solidworks_builder import create_new_part  # imported, not copied
+    # Reuse the proven connect/sketch/COM patterns (imported, not copied).
+    from pipeline.solidworks_builder import (create_new_part, to_radians,
+                                             _begin_sketch, _null_dispatch)
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -60,17 +62,19 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
             if stype == "extrude_boss":
                 length, width = m(d.get("length", 0)), m(d.get("width", 0))
                 thickness_m = m(d.get("thickness", 0)) or 0.00635
-                doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
-                sm.InsertSketch(True)
+                _begin_sketch(doc, "Front Plane", f"base {fid}")   # proven, null-dispatch-safe
                 if sm.CreateCornerRectangle(0.0, 0.0, 0.0, length, width, 0.0) is None:
                     raise BuildError(f"CreateCornerRectangle None for {fid}")
                 fd = _fully_defined(sm)
                 fully_defined.append({"feature_id": fid, "sketch": "base", "status": fd})
                 sm.InsertSketch(True)  # consume ACTIVE sketch (E006)
-                feat = fm.FeatureExtrusion3(True, False, False, 0, 0, thickness_m, 0.01,
-                                            False, False, False, False, 0, 0,
-                                            False, False, False, False,
-                                            True, True, True, 0, 0, False)
+                # Exact verified signature/types from solidworks_builder (floats
+                # for the double/angle slots — int 0 there raises "Type mismatch").
+                feat = fm.FeatureExtrusion3(
+                    True, False, False, 0, 0, float(thickness_m), 0.01,
+                    False, False, False, False, to_radians(0), to_radians(0),
+                    False, False, False, False,
+                    True, True, True, 0, 0, False)
                 if feat is None:
                     raise BuildError(f"FeatureExtrusion3 None for {fid}")
                 try:
@@ -87,14 +91,13 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
                 dia = d.get("diameter", 0)
                 r = m(dia / 2.0)
                 cx, cy = m(pos[0]), m(pos[1])
-                doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
-                sm.InsertSketch(True)
+                _begin_sketch(doc, "Front Plane", f"hole {fid}")   # proven, null-dispatch-safe
                 if sm.CreateCircleByRadius(cx, cy, 0.0, r) is None:
                     raise BuildError(f"CreateCircleByRadius None for {fid}")
                 fd = _fully_defined(sm)
                 fully_defined.append({"feature_id": fid, "sketch": "hole", "status": fd})
                 sm.InsertSketch(True)  # consume ACTIVE sketch (E006)
-                feat = _cut_thru(fm)
+                feat = _cut_thru(fm, to_radians)
                 if feat is None:
                     raise BuildError(f"FeatureCut4 None for {fid} (both directions)")
                 try:
@@ -141,14 +144,16 @@ def _fully_defined(sm) -> str:
         return "unknown"
 
 
-def _cut_thru(fm):
-    """FeatureCut4 through-all with a direction-flip retry (mirrors the builder)."""
-    for flip in (False, True):
+def _cut_thru(fm, to_radians):
+    """FeatureCut4 through-all with a direction-flip retry — exact 27-arg verified
+    signature/types from solidworks_builder (end=1 ThroughAll)."""
+    for flip in (True, False):
         try:
-            feat = fm.FeatureCut4(True, flip, False, 1, 0, 0.01, 0.01,
-                                  False, False, False, False, 0, 0,
-                                  False, False, False, False, False,
-                                  True, True, True, True, False, 0, 0, False)
+            feat = fm.FeatureCut4(
+                True, False, flip, 1, 0, 0.0, 0.01,
+                False, False, False, False, to_radians(0), to_radians(0),
+                False, False, False, False, False,
+                True, True, True, True, False, 0, 0, False, False)
             if feat is not None:
                 return feat
         except Exception:

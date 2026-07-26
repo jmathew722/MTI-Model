@@ -34,11 +34,13 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
     texts = [_t(t) for t in raw.all_text()]
 
     loops = detect_closed_loops(segs)
-    profile = largest_profile_loop(loops, raw.sheet)
+    profile = largest_profile_loop(loops, raw.sheet, segments=segs)
     circles = classify_circles(circ, profile)
     holes = [c for c in circles if c.role == "hole"]
     multipliers = parse_multipliers(texts)
-    numeric_tokens = [t for t in texts if parse_number(t["text"]).numeric]
+    # Only dimension-LIKE tokens are candidates for attachment: mostly-numeric,
+    # plausible drawing magnitude, not material/notes ("1020 STEEL", "FINISH...").
+    numeric_tokens = [t for t in texts if _is_dimension_like(t["text"])]
     attachments = attach_by_proximity(numeric_tokens, geo)
     conflicts = find_conflicts(circles, multipliers, attachments)
 
@@ -78,12 +80,18 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
                              "values_used": {"length": length, "width": width, "thickness": thickness}})
 
     # -- holes from EXACT circle geometry ---------------------------------- #
-    origin = _origin(raw.sheet)
+    # Positions are referenced to the BASE PROFILE's lower-left corner (the base
+    # rectangle is drawn from (0,0)), NOT the sheet origin — otherwise holes land
+    # in absolute sheet coordinates outside the plate and cut no material.
+    if profile is not None:
+        px0, py0 = profile.bbox[0], profile.bbox[1]
+    else:
+        px0, py0 = _origin(raw.sheet)
     for i, h in enumerate(holes, start=1):
         fid = f"F{100 + i}"
         dia = _to_draw(2 * h.radius, factor)
-        cx = _to_draw(h.center[0] - origin[0], factor)
-        cy = _to_draw(h.center[1] - origin[1], factor)
+        cx = _to_draw(h.center[0] - px0, factor)
+        cy = _to_draw(h.center[1] - py0, factor)
         # OCR correction: if a nearby MTEXT claims a diameter, compare to the exact one.
         corr = _diameter_correction(h, texts, factor, dia)
         if corr:
@@ -143,6 +151,29 @@ def _t(t) -> dict:
 
 def _origin(sheet: dict):
     return (sheet.get("min_x_m", 0.0), sheet.get("min_y_m", 0.0))
+
+
+import re as _re
+_MATERIAL_WORDS = _re.compile(r"[A-Za-z]{4,}")   # STEEL, FINISH, DRILL, EDUCATIONAL...
+
+
+def _is_dimension_like(text: str) -> bool:
+    """A token that looks like a linear dimension worth trying to attach:
+    parses to a number, plausible inch magnitude (< 200), and is not a material
+    or free-text note (a long alpha word present)."""
+    pn = parse_number(text)
+    if not pn.numeric or pn.value is None:
+        return False
+    if abs(pn.value) >= 200:            # '1020 STEEL', years, etc. — not a dimension
+        return False
+    if pn.kind in ("count",):
+        return False
+    if _MATERIAL_WORDS.search(text) and not pn.is_depth and not pn.is_through \
+            and pn.kind not in ("diameter", "radius"):
+        # letters like STEEL/FINISH dominate -> a note, not a dimension
+        if not _re.match(r"^\s*[.\d/]+", text):
+            return False
+    return True
 
 
 def _find_thickness(texts, profile, factor):

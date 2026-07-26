@@ -159,12 +159,79 @@ def exclude_furniture(loops: List[Loop], sheet: dict) -> Tuple[List[Loop], List[
     return part, furniture
 
 
-def largest_profile_loop(loops: List[Loop], sheet: dict) -> Optional[Loop]:
-    """The base profile = largest closed loop that is not sheet furniture.
+def _merge_intervals(iv: List[Tuple[float, float]], gap: float) -> List[Tuple[float, float]]:
+    if not iv:
+        return []
+    iv = sorted(iv)
+    out = [list(iv[0])]
+    for lo, hi in iv[1:]:
+        if lo <= out[-1][1] + gap:
+            out[-1][1] = max(out[-1][1], hi)
+        else:
+            out.append([lo, hi])
+    return [tuple(x) for x in out]
 
-    Never returns None when any loop exists: if every loop got classified as
-    furniture (e.g. a lone part that fills its view), fall back to the single
-    largest loop — a part is still a part."""
+
+def _covers(intervals: List[Tuple[float, float]], lo: float, hi: float, tol: float) -> bool:
+    for a, b in intervals:
+        if a <= lo + tol and b >= hi - tol:
+            return True
+    return False
+
+
+def detect_rectangle_profile(segments: List[dict], gap: float = 1.5e-3) -> Optional[Loop]:
+    """Find the largest axis-aligned rectangle whose 4 sides are all covered by
+    (possibly several collinear) line segments. Robust to the dozens of
+    dimension/extension/centre lines in a real detail drawing — the part outline
+    of these MTI plates is rectangular, and this locks onto it directly instead
+    of chaining arbitrary lines. Returns a 4-corner Loop or None."""
+    horiz: Dict[float, List[Tuple[float, float]]] = {}   # y -> x-intervals
+    vert: Dict[float, List[Tuple[float, float]]] = {}    # x -> y-intervals
+    for s in segments:
+        a, b = s.get("start_2d_m"), s.get("end_2d_m")
+        if not a or not b:
+            continue
+        if abs(a[1] - b[1]) < _SNAP:               # horizontal
+            y = _snap(a[1]); horiz.setdefault(y, []).append((min(a[0], b[0]), max(a[0], b[0])))
+        elif abs(a[0] - b[0]) < _SNAP:             # vertical
+            x = _snap(a[0]); vert.setdefault(x, []).append((min(a[1], b[1]), max(a[1], b[1])))
+    if len(horiz) < 2 or len(vert) < 2:
+        return None
+    hy = {y: _merge_intervals(iv, gap) for y, iv in horiz.items()}
+    vx = {x: _merge_intervals(iv, gap) for x, iv in vert.items()}
+    ys = sorted(hy); xs = sorted(vx)
+
+    best: Optional[Loop] = None
+    best_area = 0.0
+    for i in range(len(ys)):
+        for j in range(len(ys) - 1, i, -1):
+            y_bot, y_top = ys[i], ys[j]
+            for a in range(len(xs)):
+                for b in range(len(xs) - 1, a, -1):
+                    x_left, x_right = xs[a], xs[b]
+                    area = (x_right - x_left) * (y_top - y_bot)
+                    if area <= best_area:
+                        continue
+                    if (_covers(hy[y_bot], x_left, x_right, gap) and
+                            _covers(hy[y_top], x_left, x_right, gap) and
+                            _covers(vx[x_left], y_bot, y_top, gap) and
+                            _covers(vx[x_right], y_bot, y_top, gap)):
+                        best_area = area
+                        best = Loop(segment_ids=["rect"],
+                                    vertices=[(x_left, y_bot), (x_right, y_bot),
+                                              (x_right, y_top), (x_left, y_top)])
+    return best
+
+
+def largest_profile_loop(loops: List[Loop], sheet: dict,
+                         segments: Optional[List[dict]] = None) -> Optional[Loop]:
+    """The base profile. Prefer a detected rectangle (robust on messy real
+    drawings); else the largest non-furniture closed loop; never None when any
+    loop exists (a lone part that fills its view is still a part)."""
+    if segments:
+        rect = detect_rectangle_profile(segments)
+        if rect is not None:
+            return rect
     if not loops:
         return None
     part, _ = exclude_furniture(loops, sheet)
