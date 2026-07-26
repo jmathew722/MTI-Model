@@ -65,7 +65,7 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
                 _begin_sketch(doc, "Front Plane", f"base {fid}")   # proven, null-dispatch-safe
                 if sm.CreateCornerRectangle(0.0, 0.0, 0.0, length, width, 0.0) is None:
                     raise BuildError(f"CreateCornerRectangle None for {fid}")
-                fd = _fully_defined(sm)
+                fd = _fully_defined(doc, _null_dispatch)
                 fully_defined.append({"feature_id": fid, "sketch": "base", "status": fd})
                 sm.InsertSketch(True)  # consume ACTIVE sketch (E006)
                 # Exact verified signature/types from solidworks_builder (floats
@@ -94,7 +94,7 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
                 _begin_sketch(doc, "Front Plane", f"hole {fid}")   # proven, null-dispatch-safe
                 if sm.CreateCircleByRadius(cx, cy, 0.0, r) is None:
                     raise BuildError(f"CreateCircleByRadius None for {fid}")
-                fd = _fully_defined(sm)
+                fd = _fully_defined(doc, _null_dispatch)
                 fully_defined.append({"feature_id": fid, "sketch": "hole", "status": fd})
                 sm.InsertSketch(True)  # consume ACTIVE sketch (E006)
                 feat = _cut_thru(fm, to_radians)
@@ -138,17 +138,31 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
     return result
 
 
-def _fully_defined(sm) -> str:
-    """swSketchConstrainedStatus via ISketch.GetConstrainedStatus after a best-
-    effort FullyDefineSketch. Returns 'fully'|'under'|'over'|'unknown'."""
-    try:
-        sk = sm.ActiveSketch
-        if sk is None:
-            return "unknown"
-        st = sk.GetConstrainedStatus()   # 1=fully, 2=over, 3=under (swConst)
-        return {1: "fully", 2: "over", 3: "under"}.get(int(st), "unknown")
-    except Exception:
+def _fully_defined(doc, null_dispatch) -> str:
+    """swSketchConstrainedStatus (1 fully / 2 over / 3 under). Attempts
+    FullyDefineSketch to actually constrain a coordinate-drawn sketch, then
+    re-measures, so the gate reports a real status instead of 'unknown'."""
+    sk = doc.SketchManager.ActiveSketch
+    if sk is None:
         return "unknown"
+
+    def _status():
+        try:
+            return int(sk.GetConstrainedStatus())
+        except Exception:
+            return None
+
+    st = _status()
+    if st in (None, 3):   # unknown or under-defined -> try to auto-constrain
+        try:
+            doc.SketchManager.FullyDefineSketch(
+                True, True, 0, 0, 0,
+                null_dispatch(), null_dispatch(), null_dispatch(),
+                null_dispatch(), null_dispatch())
+            st = _status()
+        except Exception:
+            pass
+    return {1: "fully", 2: "over", 3: "under"}.get(st, "unknown")
 
 
 def _cut_thru(fm, to_radians):

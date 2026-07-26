@@ -8,6 +8,7 @@ proximity-based value attachment. The LLM is reserved for genuine ambiguity
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -179,64 +180,87 @@ def _covers(intervals: List[Tuple[float, float]], lo: float, hi: float, tol: flo
     return False
 
 
-def detect_rectangle_profile(segments: List[dict], gap: float = 1.5e-3) -> Optional[Loop]:
-    """Find the largest axis-aligned rectangle whose 4 sides are all covered by
-    (possibly several collinear) line segments. Robust to the dozens of
-    dimension/extension/centre lines in a real detail drawing — the part outline
-    of these MTI plates is rectangular, and this locks onto it directly instead
-    of chaining arbitrary lines. Returns a 4-corner Loop or None."""
-    horiz: Dict[float, List[Tuple[float, float]]] = {}   # y -> x-intervals
-    vert: Dict[float, List[Tuple[float, float]]] = {}    # x -> y-intervals
+def rectangle_candidates(segments: List[dict], gap: float = 1.5e-3) -> List[Loop]:
+    """Every axis-aligned rectangle whose 4 sides are covered by (possibly several
+    collinear) line segments, largest-area first. Robust to the dozens of
+    dimension/extension/centre lines in a real detail drawing."""
+    horiz: Dict[float, List[Tuple[float, float]]] = {}
+    vert: Dict[float, List[Tuple[float, float]]] = {}
     for s in segments:
         a, b = s.get("start_2d_m"), s.get("end_2d_m")
         if not a or not b:
             continue
-        if abs(a[1] - b[1]) < _SNAP:               # horizontal
+        if abs(a[1] - b[1]) < _SNAP:
             y = _snap(a[1]); horiz.setdefault(y, []).append((min(a[0], b[0]), max(a[0], b[0])))
-        elif abs(a[0] - b[0]) < _SNAP:             # vertical
+        elif abs(a[0] - b[0]) < _SNAP:
             x = _snap(a[0]); vert.setdefault(x, []).append((min(a[1], b[1]), max(a[1], b[1])))
     if len(horiz) < 2 or len(vert) < 2:
-        return None
+        return []
     hy = {y: _merge_intervals(iv, gap) for y, iv in horiz.items()}
     vx = {x: _merge_intervals(iv, gap) for x, iv in vert.items()}
     ys = sorted(hy); xs = sorted(vx)
-
-    best: Optional[Loop] = None
-    best_area = 0.0
+    out: List[Loop] = []
     for i in range(len(ys)):
-        for j in range(len(ys) - 1, i, -1):
+        for j in range(i + 1, len(ys)):
             y_bot, y_top = ys[i], ys[j]
             for a in range(len(xs)):
-                for b in range(len(xs) - 1, a, -1):
+                for b in range(a + 1, len(xs)):
                     x_left, x_right = xs[a], xs[b]
-                    area = (x_right - x_left) * (y_top - y_bot)
-                    if area <= best_area:
-                        continue
                     if (_covers(hy[y_bot], x_left, x_right, gap) and
                             _covers(hy[y_top], x_left, x_right, gap) and
                             _covers(vx[x_left], y_bot, y_top, gap) and
                             _covers(vx[x_right], y_bot, y_top, gap)):
-                        best_area = area
-                        best = Loop(segment_ids=["rect"],
-                                    vertices=[(x_left, y_bot), (x_right, y_bot),
-                                              (x_right, y_top), (x_left, y_top)])
-    return best
+                        out.append(Loop(segment_ids=["rect"],
+                                        vertices=[(x_left, y_bot), (x_right, y_bot),
+                                                  (x_right, y_top), (x_left, y_top)]))
+    out.sort(key=lambda lp: lp.bbox_area, reverse=True)
+    return out[:60]
+
+
+def detect_rectangle_profile(segments: List[dict], gap: float = 1.5e-3) -> Optional[Loop]:
+    """The largest covered rectangle (backward-compatible helper)."""
+    c = rectangle_candidates(segments, gap)
+    return c[0] if c else None
+
+
+def select_rectangle_profile(segments: List[dict], stated_values_m: List[float],
+                             gap: float = 1.5e-3, tol: float = 0.6e-3):
+    """Ground the base profile in the drawing's OWN numbers: among candidate
+    rectangles, prefer the one whose width AND height each match a stated overall
+    dimension (from the MTEXT), so a rectangle formed by dimension/extension lines
+    cannot win over the real outline. Returns (Loop|None, matched_sides:int).
+
+    matched_sides == 2 -> both edges confirmed by a stated dimension (confident);
+    1 or 0 -> profile is the largest rectangle but UNVERIFIED (caller flags it)."""
+    cands = rectangle_candidates(segments, gap)
+    if not cands:
+        return None, 0
+
+    def matched(lp: Loop) -> int:
+        return sum(1 for dim in (lp.width, lp.height)
+                   if any(abs(dim - sv) <= tol for sv in stated_values_m))
+    # prefer 2 matched sides, then 1, then area — but never let a tiny
+    # dimension-box rectangle with 2 matches beat a big outline with 2 matches.
+    best = max(cands, key=lambda lp: (min(matched(lp), 2), lp.bbox_area))
+    return best, matched(best)
 
 
 def largest_profile_loop(loops: List[Loop], sheet: dict,
-                         segments: Optional[List[dict]] = None) -> Optional[Loop]:
-    """The base profile. Prefer a detected rectangle (robust on messy real
-    drawings); else the largest non-furniture closed loop; never None when any
-    loop exists (a lone part that fills its view is still a part)."""
+                         segments: Optional[List[dict]] = None,
+                         stated_values_m: Optional[List[float]] = None):
+    """The base profile. Prefer a rectangle grounded in stated dimensions; else
+    the largest covered rectangle; else the largest non-furniture closed loop.
+    Returns (Loop|None, matched_sides) — matched_sides is 2 when the profile is
+    confirmed by the drawing's own overall dimensions."""
     if segments:
-        rect = detect_rectangle_profile(segments)
+        rect, matched = select_rectangle_profile(segments, stated_values_m or [])
         if rect is not None:
-            return rect
+            return rect, matched
     if not loops:
-        return None
+        return None, 0
     part, _ = exclude_furniture(loops, sheet)
     pool = part if part else loops
-    return max(pool, key=lambda lp: lp.bbox_area)
+    return max(pool, key=lambda lp: lp.bbox_area), 0
 
 
 def classify_circles(circles: List[dict], profile: Optional[Loop],
@@ -333,6 +357,33 @@ def attach_by_proximity(tokens: List[dict], geometry: List[dict],
             "confidence": round(conf, 3),
         })
     return attachments
+
+
+def classify_hole_callout(text: str) -> dict:
+    """Classify a hole callout's manufacturing type from its text. The subtype
+    decides how the hole is built/annotated; params are recorded for the output.
+    countersink > counterbore > tapped > simple (most specific wins)."""
+    t = (text or "").upper()
+    if re.search(r"C'?SINK|CSK|COUNTERSINK|FLAT\s*HD", t):
+        sub = "countersink"
+    elif re.search(r"C'?BORE|CBORE|COUNTERBORE|SOC\.?\s*HD|SHCS", t):
+        sub = "counterbore"
+    elif re.search(r"\bTAP\b|THREAD|NPT|\d+\s*-\s*\d+\b", t):
+        sub = "tapped"
+    else:
+        sub = "simple"
+    return {"subtype": sub, "callout": (text or "").strip()}
+
+
+def gauge_thickness(text_tokens: List[dict]):
+    """Sheet-metal thickness from a gauge callout, e.g. '7 GA. (.179)' -> .179.
+    Returns (value, token_id) or None. High confidence — an explicit thickness."""
+    for t in text_tokens:
+        m = re.search(r"\bGA(?:UGE)?\.?\s*\(?\s*(\.\d+|\d+\.\d+)\s*\)?",
+                      t.get("text", ""), re.IGNORECASE)
+        if m:
+            return float(m.group(1)), t.get("id")
+    return None
 
 
 def _geom_anchor(g: dict) -> Optional[Tuple[float, float]]:

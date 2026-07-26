@@ -14,7 +14,8 @@ from typing import Any, Dict, List, Optional
 from ..extract.schema import RawExtraction
 from .numbers import parse_number
 from .rules import (Circle, attach_by_proximity, classify_circles,
-                    detect_closed_loops, largest_profile_loop, parse_multipliers)
+                    classify_hole_callout, detect_closed_loops, gauge_thickness,
+                    largest_profile_loop, parse_multipliers)
 from .conflicts import find_conflicts
 
 _UNIT_FACTOR = {"inch": 0.0254, "mm": 0.001, "cm": 0.01, "m": 1.0, "feet": 0.3048}
@@ -34,7 +35,16 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
     texts = [_t(t) for t in raw.all_text()]
 
     loops = detect_closed_loops(segs)
-    profile = largest_profile_loop(loops, raw.sheet, segments=segs)
+    # Ground the base profile in the drawing's OWN stated dimensions so a
+    # dimension-line rectangle cannot masquerade as the outline.
+    stated_vals_m = []
+    for t in texts:
+        if _is_dimension_like(t["text"]):
+            pn = parse_number(t["text"])
+            if pn.value:
+                stated_vals_m.append(pn.value * factor)
+    profile, matched_sides = largest_profile_loop(loops, raw.sheet, segments=segs,
+                                                  stated_values_m=stated_vals_m)
     circles = classify_circles(circ, profile)
     holes = [c for c in circles if c.role == "hole"]
     multipliers = parse_multipliers(texts)
@@ -43,6 +53,18 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
     numeric_tokens = [t for t in texts if _is_dimension_like(t["text"])]
     attachments = attach_by_proximity(numeric_tokens, geo)
     conflicts = find_conflicts(circles, multipliers, attachments)
+    # Profile confidence: both edges confirmed by a stated overall dimension?
+    if profile is not None and matched_sides < 2:
+        conflicts.append({
+            "type": "profile_unverified", "blocking": False, "severity": "MEDIUM",
+            "detail": (f"Base profile {round(profile.width / factor, 3)}×"
+                       f"{round(profile.height / factor, 3)} could not be fully "
+                       f"confirmed against a stated overall dimension "
+                       f"({matched_sides}/2 edges matched) — verify the outline."),
+        })
+    # Hole callout tokens (tapped / countersink / counterbore) for type + flags.
+    callout_tokens = [t for t in texts
+                      if classify_hole_callout(t["text"])["subtype"] != "simple"]
 
     steps: List[Dict[str, Any]] = []
     dispositions: List[Dict[str, Any]] = []
@@ -60,7 +82,12 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
     else:
         length = _to_draw(profile.width, factor)
         width = _to_draw(profile.height, factor)
-        thickness, th_prov, th_flag = _find_thickness(texts, profile, factor)
+        # Sheet-metal gauge callout is the most reliable thickness; else infer.
+        g = gauge_thickness(texts)
+        if g:
+            thickness, th_prov, th_flag = round(g[0], 4), f"text:{g[1]} (gauge)", None
+        else:
+            thickness, th_prov, th_flag = _find_thickness(texts, profile, factor)
         base_prov = [f"loop:{','.join(profile.segment_ids[:8])}"]
         steps.append({
             "seq": 1, "feature_id": "F001", "type": "extrude_boss",
@@ -87,6 +114,7 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
         px0, py0 = profile.bbox[0], profile.bbox[1]
     else:
         px0, py0 = _origin(raw.sheet)
+    import math as _math
     for i, h in enumerate(holes, start=1):
         fid = f"F{100 + i}"
         dia = _to_draw(2 * h.radius, factor)
@@ -96,18 +124,33 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
         corr = _diameter_correction(h, texts, factor, dia)
         if corr:
             corrections.append(corr)
+        # Manufacturing type from the nearest hole callout (tapped/csink/cbore).
+        htype, callout, hflags = "simple", "", []
+        if callout_tokens:
+            near = min(callout_tokens, key=lambda t: _math.hypot(
+                t["position_2d_m"][0] - h.center[0], t["position_2d_m"][1] - h.center[1]))
+            cl = classify_hole_callout(near["text"])
+            htype, callout = cl["subtype"], cl["callout"]
+            if htype in ("tapped", "countersink", "counterbore"):
+                hflags.append({"tier": "MEDIUM", "note":
+                    f"{htype} ({callout!r}) recorded from callout but NOT geometrically "
+                    f"modeled — a through-hole at the exact ⌀{dia} is built; verify the "
+                    f"{'thread' if htype == 'tapped' else htype} treatment."})
         steps.append({
             "seq": 3 + i, "feature_id": fid, "type": "hole",
-            "description": f"Hole ⌀{dia} at ({cx}, {cy}) — exact from circle {h.id}",
+            "description": f"Hole ⌀{dia} ({htype}) at ({cx}, {cy}) — exact from circle {h.id}",
             "dimensions_drawing_units": {"diameter": dia},
             "positions_xy": [[cx, cy]],
             "depth_type": "through_all",
+            "hole_type": htype, "callout": callout,
             "hole_instances": h.instances,
             "provenance": [f"circle:{h.id}"],
             "provenance_map": {"diameter": f"circle:{h.id}", "position": f"circle:{h.id}"},
-            "flags": [],
+            "flags": hflags,
         })
-        dispositions.append({"feature_id": fid, "type": "hole", "state": "BUILT",
+        dispositions.append({"feature_id": fid, "type": "hole",
+                             "state": "BUILT" if not hflags else "BUILT_WITH_FLAG",
+                             "hole_type": htype,
                              "values_used": {"diameter": dia, "x": cx, "y": cy},
                              "position_source": "vector_geometry"})
 

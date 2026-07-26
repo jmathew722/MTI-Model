@@ -17,7 +17,8 @@ _NUM = r"[-+]?(?:\d+\.\d+|\.\d+|\d+)"
 _NUM_RE = re.compile(_NUM)
 # Leading diameter/radius/count qualifiers.
 _DIA_RE = re.compile(r"(?:Ø|⌀|DIA\.?|\bR\b|\bR(?=\.?\d))", re.IGNORECASE)
-_COUNT_RE = re.compile(r"\b(\d+)\s*(?:X|PLACES?|HOLES?|HLS?|REQD?)\b", re.IGNORECASE)
+# Count/multiplier: "6X", "4 PLACES", and hyphenated "12-HOLES"/"4-HLS".
+_COUNT_RE = re.compile(r"\b(\d+)\s*[-\s]?\s*(?:X\b|PLACES?|HOLES?|HLS?|REQD?)", re.IGNORECASE)
 _TYP_RE = re.compile(r"\bTYP\b", re.IGNORECASE)
 _THRU_RE = re.compile(r"\bTHRU\b", re.IGNORECASE)
 _DEEP_RE = re.compile(r"\b(?:DP|DEEP)\b", re.IGNORECASE)

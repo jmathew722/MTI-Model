@@ -63,8 +63,8 @@ def test_largest_profile_picks_the_part_not_a_stray_line():
     segs = _rect(0, 0, 4 * IN, 2 * IN)
     segs.append({"id": "GX", "type": "line", "start_2d_m": [0, 0], "end_2d_m": [1 * IN, 0]})
     loops = detect_closed_loops(segs)
-    profile = largest_profile_loop(loops, {"width_m": 4 * IN, "height_m": 2 * IN,
-                                           "min_x_m": 0, "min_y_m": 0})
+    profile, _ = largest_profile_loop(loops, {"width_m": 4 * IN, "height_m": 2 * IN,
+                                              "min_x_m": 0, "min_y_m": 0})
     assert profile is not None
     assert profile.bbox_area == pytest.approx(4 * IN * 2 * IN, rel=1e-3)
 
@@ -73,10 +73,41 @@ def test_border_frame_excluded_in_favour_of_inner_part():
     # outer frame (border) contains a smaller part rectangle
     segs = _rect(0, 0, 10 * IN, 8 * IN, prefix="B") + _rect(2 * IN, 2 * IN, 6 * IN, 5 * IN, prefix="P")
     loops = detect_closed_loops(segs)
-    profile = largest_profile_loop(loops, {"width_m": 10 * IN, "height_m": 8 * IN,
-                                           "min_x_m": 0, "min_y_m": 0})
+    profile, _ = largest_profile_loop(loops, {"width_m": 10 * IN, "height_m": 8 * IN,
+                                              "min_x_m": 0, "min_y_m": 0})
     # the inner part (4x3) wins because the outer frame is furniture (contains it)
     assert profile.width == pytest.approx(4 * IN, abs=1e-3)
+
+
+def test_profile_grounding_rejects_dimension_rectangle():
+    # A big dimension-line rectangle (7x5) plus the real 4x2 part; the stated
+    # overall dimensions are 4.0 and 2.0, so the 4x2 must win despite being smaller.
+    from dwg_native.semantic.rules import select_rectangle_profile
+    segs = _rect(0, 0, 7 * IN, 5 * IN, prefix="D") + _rect(0, 0, 4 * IN, 2 * IN, prefix="P")
+    prof, matched = select_rectangle_profile(segs, [4 * IN, 2 * IN])
+    assert matched == 2
+    assert prof.width == pytest.approx(4 * IN, abs=1e-3)
+    assert prof.height == pytest.approx(2 * IN, abs=1e-3)
+
+
+def test_hyphenated_and_paren_counts_parse():
+    assert parse_number("12-HOLES").count == 12
+    assert parse_number("4-HOLES").count == 4
+    assert parse_number("6X").count == 6
+
+
+def test_gauge_thickness_extracted():
+    from dwg_native.semantic.rules import gauge_thickness
+    g = gauge_thickness([{"id": "T1", "text": "7 GA. (.179)"}])
+    assert g is not None and g[0] == pytest.approx(0.179)
+
+
+def test_hole_callout_classification():
+    from dwg_native.semantic.rules import classify_hole_callout
+    assert classify_hole_callout(".38-16 TAP .75 DP.")["subtype"] == "tapped"
+    assert classify_hole_callout("DR. & C'SINK FOR .250 FLAT HD. SCR.")["subtype"] == "countersink"
+    assert classify_hole_callout("DRILL & C'BORE FOR 3/8 SOC. HD.")["subtype"] == "counterbore"
+    assert classify_hole_callout("Ø.50 THRU")["subtype"] == "simple"
 
 
 # ---- circle classification ------------------------------------------------ #
