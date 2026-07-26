@@ -29,6 +29,18 @@ def create_app() -> FastAPI:
     app = FastAPI(title="DWG-native pipeline")
     _JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
+    # Never let the browser serve a stale app.js/styles.css/index — a cached old
+    # bundle is exactly how "the button stopped working after an update" happens.
+    @app.middleware("http")
+    async def _no_cache(request, call_next):
+        resp = await call_next(request)
+        p = request.url.path
+        if p == "/" or p.startswith("/static"):
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+        return resp
+
     queue = JobQueue(runner=run_job, session_factory=ComSession, per_job_timeout_s=600.0)
     app.state.queue = queue
 
