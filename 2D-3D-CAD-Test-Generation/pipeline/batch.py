@@ -264,6 +264,26 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
     # [STAGE] markers: machine-readable progress lines for the web UI's stepper.
     raw_extraction = drawing_data
 
+    # ── Stage 2.4: DWG native cross-check — when the source is a DWG, SolidWorks
+    # imports it and its EXACT dimension text verifies/corrects the OCR extraction
+    # BEFORE spec reconciliation + resolution. Additive; no-op off Windows / no SW.
+    dwg_crosscheck_report = None
+    try:
+        from pipeline.dwg_crosscheck import is_dwg, run_dwg_crosscheck
+
+        if is_dwg(source):
+            _pb = (raw_extraction.get("part_number") or raw_extraction.get("part_name")
+                   or Path(source).stem)
+            print("[STAGE] DWG native cross-check", flush=True)
+            raw_extraction, dwg_crosscheck_report = run_dwg_crosscheck(
+                source, raw_extraction, output_dir, _pb, write_report=False)
+            if dwg_crosscheck_report and not dwg_crosscheck_report.get("skipped"):
+                print(f"[DWG] {dwg_crosscheck_report.get('summary', '')}", flush=True)
+            elif dwg_crosscheck_report:
+                print(f"[DWG] cross-check skipped: {dwg_crosscheck_report.get('skipped')}", flush=True)
+    except Exception as e:
+        print(f"[DWG] cross-check error (skipped): {e}", flush=True)
+
     # ── Specs-first: the operator's must-meet specifications are read at the
     # START of processing so Stage 2.5 resolution treats them as a first-class
     # input (they are still verified against the final build afterwards).
@@ -369,6 +389,10 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
     (part_dir / f"{safe}_extraction.json").write_text(
         json.dumps(raw_extraction, indent=2), encoding="utf-8"
     )
+    if dwg_crosscheck_report is not None:
+        from pipeline.dwg_crosscheck import write_crosscheck_report
+
+        write_crosscheck_report(dwg_crosscheck_report, part_dir, safe)
     if resolution is not None:
         (part_dir / f"{safe}_resolved_extraction.json").write_text(
             json.dumps(resolution.resolved_extraction, indent=2), encoding="utf-8"

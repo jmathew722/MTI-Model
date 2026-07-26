@@ -159,6 +159,18 @@ def _print_resolution_summary(resolution) -> None:
         )
 
 
+def is_dwg(path) -> bool:
+    """True if ``path`` is a DWG file (input for the Stage 2.4 cross-check)."""
+    try:
+        return Path(str(path)).suffix.lower() == ".dwg"
+    except Exception:
+        return False
+
+
+def _dwg_crosscheck_enabled(args) -> bool:
+    return not getattr(args, "no_dwg_crosscheck", False)
+
+
 def _prepare_and_extract(args) -> tuple[dict | None, dict | None]:
     """Stages 1-2: image prep + Stage 1.5 overview analysis + Claude extraction.
 
@@ -168,8 +180,23 @@ def _prepare_and_extract(args) -> tuple[dict | None, dict | None]:
     console.print("[1/4] Preparing drawing image...")
     from utils.image_prep import ImagePrepError, prepare_image
 
+    # DWG input: render the sheet to a PDF via the SolidWorks import so the vision
+    # model has an image to read. The SAME import is cached and reused by the
+    # Stage 2.4 cross-check, so SolidWorks is only touched once.
+    ocr_input = args.drawing
+    if _dwg_crosscheck_enabled(args) and is_dwg(args.drawing):
+        from pipeline.dwg_crosscheck import get_ground_truth
+
+        gt = get_ground_truth(args.drawing, args.output)
+        if gt.pdf_path and Path(gt.pdf_path).is_file():
+            ocr_input = gt.pdf_path
+            console.print(f"  DWG rendered to PDF via SolidWorks for OCR: {Path(gt.pdf_path).name}")
+        else:
+            console.print(f"  [yellow]DWG render unavailable ({gt.note}); "
+                          "attempting direct extraction on the DWG.[/yellow]")
+
     try:
-        prepared = prepare_image(args.drawing, page=args.page, return_details=True)
+        prepared = prepare_image(ocr_input, page=args.page, return_details=True)
     except ImagePrepError as e:
         console.print(f"[red]Image preparation failed:[/red] {e}")
         return None, None
@@ -757,6 +784,13 @@ def main() -> int:
         help="Which region crop images to keep on disk (the per-region extraction "
         "sidecars are always kept as the field->region audit trail). Default all.",
     )
+    parser.add_argument(
+        "--no-dwg-crosscheck", action="store_true",
+        help="Disable Stage 2.4 DWG native cross-check. By default, when the input "
+        "is a DWG, SolidWorks imports it and its EXACT dimension text is used to "
+        "verify/correct the OCR extraction before the build (no-op off Windows / "
+        "without SolidWorks).",
+    )
     args = parser.parse_args()
 
     console.print(Panel("2D -> 3D SolidWorks Pipeline", style="bold blue"))
@@ -811,6 +845,33 @@ def main() -> int:
     if vector_src is not None and vector_src.is_file():
         drawing_data = _augment_holes(drawing_data, vector_src, args.page)
 
+    # --- Stage 2.4: DWG native cross-check (only when the input is a DWG) ---
+    # SolidWorks imports the DWG and reads its EXACT dimension text; each OCR
+    # value is confirmed or corrected to the exact value BEFORE it commits to the
+    # resolver/build. Purely additive; no-ops off Windows / without SolidWorks.
+    dwg_crosscheck_report = None
+    dwg_src = None
+    if getattr(args, "source_file", None) and is_dwg(args.source_file):
+        dwg_src = Path(args.source_file)
+    elif is_dwg(args.drawing):
+        dwg_src = Path(args.drawing)
+    if dwg_src is not None and _dwg_crosscheck_enabled(args):
+        console.print("[2.4/4] DWG native cross-check (SolidWorks exact dimensions)...")
+        from pipeline.dwg_crosscheck import run_dwg_crosscheck
+
+        _part_base = (drawing_data.get("part_number") or drawing_data.get("part_name")
+                      or dwg_src.stem)
+        drawing_data, dwg_crosscheck_report = run_dwg_crosscheck(
+            dwg_src, drawing_data, Path(args.output), _part_base, write_report=False)
+        if dwg_crosscheck_report and not dwg_crosscheck_report.get("skipped"):
+            r = dwg_crosscheck_report
+            console.print(f"  {r.get('summary', '')}")
+            for c in r.get("corrected", [])[:12]:
+                console.print(f"    [cyan]corrected[/cyan] {c['id']}: "
+                              f"{c['ocr']} -> {c['dwg']} (delta {c['delta']})")
+        elif dwg_crosscheck_report:
+            console.print(f"  [yellow]skipped: {dwg_crosscheck_report.get('skipped')}[/yellow]")
+
     # The raw extraction is kept verbatim for traceability (saved as _extraction.json);
     # Stage 2.5 produces the resolved copy that actually drives verification + build.
     raw_extraction = drawing_data
@@ -838,6 +899,10 @@ def main() -> int:
     extraction_path = _save_extraction(output_dir, folder_name, raw_extraction)
     console.print(f"  Extraction saved to {extraction_path}")
     safe_base = extraction_path.name.removesuffix("_extraction.json")
+    if dwg_crosscheck_report is not None:
+        from pipeline.dwg_crosscheck import write_crosscheck_report
+
+        write_crosscheck_report(dwg_crosscheck_report, extraction_path.parent, safe_base)
     if overview_analysis:
         from pipeline.overview_analysis import save_overview_analysis
 
