@@ -34,6 +34,7 @@ class ImportResult:
     dxf_path: Path           # SolidWorks-converted DXF (read by the extractor)
     load_errors: int
     notes: List[str]
+    pdf_path: Path = None    # SolidWorks-rendered PDF of the sheet (for the UI preview)
 
 
 def import_dwg(session, dwg_path: str | Path, work_dir: str | Path) -> ImportResult:
@@ -85,8 +86,23 @@ def import_dwg(session, dwg_path: str | Path, work_dir: str | Path) -> ImportRes
             f"SolidWorks produced no DXF from the imported drawing (saveas={ok}, "
             f"path={dxf_win}).")
     notes.append(f"SolidWorks converted DWG -> DXF ({dxf.name}); saveas={ok}")
+
+    # Also render the imported sheet to PDF straight from SolidWorks (it already
+    # has the drawing open) — this is the drawing view the UI shows on the left.
+    pdf = (work.resolve() / f"{src.stem}_sheet.pdf")
+    try:
+        _call(doc, "SaveAs3", str(pdf).replace("/", "\\"), 0, 0)
+        if pdf.is_file():
+            notes.append(f"rendered sheet PDF ({pdf.name})")
+        else:
+            pdf = None
+            notes.append("sheet PDF export produced no file (preview falls back to geometry)")
+    except Exception as e:
+        pdf = None
+        notes.append(f"sheet PDF export failed: {type(e).__name__}")
+
     return ImportResult(doc=doc, doc_title=title, dxf_path=dxf,
-                        load_errors=int(errs.value or 0), notes=notes)
+                        load_errors=int(errs.value or 0), notes=notes, pdf_path=pdf)
 
 
 def _call(obj: Any, name: str, *args: Any, default: Any = None) -> Any:

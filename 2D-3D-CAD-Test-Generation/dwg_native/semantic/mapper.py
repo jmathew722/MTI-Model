@@ -177,26 +177,39 @@ def _is_dimension_like(text: str) -> bool:
 
 
 def _find_thickness(texts, profile, factor):
-    """Pick a plate thickness from MTEXT: the smallest standalone length token that
-    is not a profile dimension, diameter, radius, count, or tolerance. Returns
-    (thickness_draw_units, provenance, flag_or_None). Never silently invents."""
+    """Pick a plate thickness from MTEXT. Returns (thickness_draw_units, provenance,
+    flag_or_None). Thickness is the least reliable value on a single-view plate
+    (it is often only in a side view or a note), so:
+      * a token explicitly labelled THK/THICK is trusted (no flag),
+      * otherwise the smallest plausible standalone length is used but ALWAYS
+        flagged MEDIUM (it could be a hole/feature size, e.g. a tap-drill),
+      * if nothing plausible exists, a conservative 0.25 is committed and flagged.
+    Never silently invents; the flag surfaces in the UI + engineering review."""
     len_draw = round(profile.width / factor, 4)
     wid_draw = round(profile.height / factor, 4)
+    # 1) an explicitly labelled thickness wins outright.
+    for t in texts:
+        if _re.search(r"\b(THK|THICK|THICKNESS)\b", t["text"], _re.IGNORECASE):
+            pn = parse_number(t["text"])
+            if pn.numeric:
+                return round(pn.value, 4), f"text:{t['id']} (labelled THK)", None
+    # 2) smallest plausible standalone length — used, but flagged as inferred.
     candidates = []
     for t in texts:
         pn = parse_number(t["text"])
-        if pn.kind in ("length",) and pn.numeric and not pn.count:
+        if pn.kind == "length" and pn.numeric and not pn.count and not pn.is_depth:
             v = round(pn.value, 4)
             if v in (len_draw, wid_draw):
                 continue
-            if 0.0 < v < 0.5 * min(len_draw, wid_draw):  # plausible thickness
-                candidates.append((v, t["id"]))
+            if 0.0 < v < 0.5 * min(len_draw, wid_draw):
+                candidates.append((v, t["id"], t["text"]))
     if candidates:
-        v, tid = min(candidates, key=lambda c: c[0])
-        return v, f"text:{tid}", None
-    # No thickness dimension found -> declared conservative, flagged, provenance-honest.
+        v, tid, txt = min(candidates, key=lambda c: c[0])
+        return v, f"text:{tid} (inferred)", (
+            f"Thickness {v:g} INFERRED from {txt!r} — no side view / THK label; "
+            "could be a feature/hole size. Verify against the drawing.")
     return 0.25, "derived:no_thickness_dimension_found", \
-        "No thickness/side-view dimension found; committed conservative 0.25 (flagged)."
+        "No thickness/side-view dimension found; committed conservative 0.25 (verify)."
 
 
 def _diameter_correction(hole: Circle, texts, factor, exact_dia):

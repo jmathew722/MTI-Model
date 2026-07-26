@@ -24,12 +24,11 @@
     <section class="panel" data-active="true" id="panel-drawing" role="tabpanel">
       <div class="controls">
         <div class="field">
-          <label for="fmt">Format</label>
-          <select id="fmt"><option value="dwg" selected>DWG</option>
-            <option value="dxf" disabled>DXF (soon)</option></select>
+          <label for="fileInput">Import from computer</label>
+          <input type="file" id="fileInput" accept=".dwg,.DWG,.dxf,.DXF" />
         </div>
         <div class="field">
-          <label for="sample">Test drawing</label>
+          <label for="sample">…or a drawing on the server</label>
           <select id="sample"><option value="">— select a DWG —</option></select>
         </div>
         <button class="btn" id="runBtn" type="button" disabled>▶ Import &amp; Build</button>
@@ -38,8 +37,10 @@
 
       <div class="viewers">
         <div class="viewer">
-          <h3>Imported drawing <span class="mono" id="drawStat">— exact geometry —</span></h3>
-          <div class="stage"><canvas id="drawingCanvas"></canvas>
+          <h3>Imported drawing <span class="mono" id="drawStat">— PDF from SolidWorks —</span></h3>
+          <div class="stage">
+            <iframe id="pdfView" title="imported drawing (PDF)" style="display:none"></iframe>
+            <canvas id="drawingCanvas" style="display:none"></canvas>
             <div class="empty" id="drawEmpty">no drawing loaded</div></div>
         </div>
         <div class="viewer">
@@ -53,6 +54,25 @@
         <h3>Build traveler</h3>
         <div class="stages" id="stages"></div>
         <div class="job-detail" id="jobDetail">idle — pick a drawing and run.</div>
+      </div>
+
+      <div class="section" id="dimsSection">
+        <h3>Extracted dimensions — from the SolidWorks import
+          <span class="mono" id="dimsCount" style="color:var(--ink-3)"></span></h3>
+        <div class="dims-grid">
+          <div>
+            <h4>Geometry-derived <span class="tag cyan">exact</span></h4>
+            <div class="scroll-x"><table class="insp" id="geomDims">
+              <thead><tr><th>Feature</th><th>Dimension</th><th>Value</th><th>From</th></tr></thead>
+              <tbody><tr><td colspan="4" class="empty-note">run a drawing —</td></tr></tbody></table></div>
+          </div>
+          <div>
+            <h4>Drawing text (MTEXT) <span class="tag amber">as read</span></h4>
+            <div class="scroll-x"><table class="insp" id="textDims">
+              <thead><tr><th>Text</th><th>Value</th><th>Kind</th><th>Pos&nbsp;(in)</th></tr></thead>
+              <tbody><tr><td colspan="4" class="empty-note">run a drawing —</td></tr></tbody></table></div>
+          </div>
+        </div>
       </div>
     </section>
 

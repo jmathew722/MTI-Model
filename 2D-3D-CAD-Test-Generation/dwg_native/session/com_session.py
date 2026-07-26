@@ -93,13 +93,34 @@ class ComSession:
         return self._sw
 
     def close_all_documents(self) -> None:
-        """Close every open document so leaked docs do not accumulate between jobs."""
+        """Close every open document so leaked docs do not accumulate between jobs.
+
+        CloseAllDocuments is unreliable under late binding on this build, so fall
+        back to iterating GetFirstDocument/GetNext and closing each by title."""
         if self._sw is None:
             return
         try:
             self._sw.CloseAllDocuments(True)
+            return
+        except Exception:
+            pass
+        try:
+            import win32com.client as win32  # type: ignore
+            d = self._sw.GetFirstDocument()
+            titles = []
+            guard = 0
+            while d is not None and guard < 200:
+                guard += 1
+                d = win32.Dispatch(d)
+                try:
+                    titles.append(d.GetTitle if isinstance(d.GetTitle, str) else d.GetTitle())
+                except Exception:
+                    pass
+                d = d.GetNext() if hasattr(d, "GetNext") else None
+            for t in titles:
+                self.close_doc(t)
         except Exception as e:
-            log.warning("CloseAllDocuments failed (continuing): %s", e)
+            log.warning("document cleanup skipped (continuing): %s", e)
 
     def close_doc(self, title: str) -> None:
         if self._sw is None or not title:

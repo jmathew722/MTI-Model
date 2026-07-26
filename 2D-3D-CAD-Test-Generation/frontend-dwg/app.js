@@ -45,26 +45,41 @@ async function loadSamples() {
   } catch (e) { /* offline / no samples */ }
 }
 document.getElementById("refreshBtn").onclick = loadSamples;
-document.getElementById("sample").onchange = (e) => {
-  document.getElementById("runBtn").disabled = !e.target.value;
+function syncRunEnabled() {
+  const hasFile = document.getElementById("fileInput").files.length > 0;
+  const hasSample = !!document.getElementById("sample").value;
+  document.getElementById("runBtn").disabled = !(hasFile || hasSample);
+}
+document.getElementById("sample").onchange = () => {
+  if (document.getElementById("sample").value) document.getElementById("fileInput").value = "";
+  syncRunEnabled();
+};
+document.getElementById("fileInput").onchange = () => {
+  if (document.getElementById("fileInput").files.length) document.getElementById("sample").value = "";
+  syncRunEnabled();
 };
 
-/* ---- run --------------------------------------------------------------- */
+/* ---- run: local file upload OR server-side sample ---------------------- */
 document.getElementById("runBtn").onclick = async () => {
+  const file = document.getElementById("fileInput").files[0];
   const path = document.getElementById("sample").value;
-  if (!path) return;
+  if (!file && !path) return;
   resetRun();
   const fd = new FormData();
-  fd.append("server_path", path);
+  if (file) { fd.append("file", file); setDetail("uploading " + file.name + " …"); }
+  else fd.append("server_path", path);
   const r = await fetch("/api/dwg/jobs", { method: "POST", body: fd });
   const d = await r.json();
   if (!r.ok) { setDetail("submit failed: " + (d.detail || r.status), true); return; }
   pollJob(d.job_id);
 };
 
+let pdfShown = false;
 function resetRun() {
-  geometryDrawn = false; lastGeometry = null;
+  geometryDrawn = false; lastGeometry = null; pdfShown = false;
   document.getElementById("drawEmpty").style.display = "grid";
+  document.getElementById("pdfView").style.display = "none";
+  document.getElementById("drawingCanvas").style.display = "none";
   document.getElementById("partEmpty").style.display = "grid";
   renderStages("queued", false);
 }
@@ -78,10 +93,26 @@ function pollJob(id) {
     renderStages(job.status, job.status === "failed");
     setDetail(job.stage_detail || job.status + (job.error ? " — " + job.error : ""),
               job.status === "failed");
-    // draw the exact geometry as soon as extraction produced it
+    // Left view: prefer the SolidWorks-rendered PDF; fall back to exact geometry.
+    if (!pdfShown && job.artifacts && job.artifacts.sheet_pdf) {
+      const f = document.getElementById("pdfView");
+      f.src = "/api/dwg/jobs/" + id + "/sheet.pdf";
+      f.style.display = "block";
+      document.getElementById("drawEmpty").style.display = "none";
+      document.getElementById("drawingCanvas").style.display = "none";
+      document.getElementById("drawStat").textContent = "PDF from SolidWorks";
+      pdfShown = true;
+    }
     if (!geometryDrawn && ["extracting","mapping","building","verifying","done","failed"].includes(job.status)) {
       const g = await (await fetch("/api/dwg/jobs/" + id + "/geometry")).json();
-      if (g && g.views && g.views.length) { lastGeometry = g; drawGeometry(g); geometryDrawn = true; }
+      if (g && g.views && g.views.length) {
+        lastGeometry = g;
+        if (!pdfShown) {   // only draw the canvas when there is no PDF to show
+          document.getElementById("drawingCanvas").style.display = "block";
+          drawGeometry(g);
+        }
+        geometryDrawn = true;
+      }
     }
     if (job.status === "done" || job.status === "failed") {
       clearInterval(pollTimer); pollTimer = null;
@@ -182,6 +213,7 @@ function finishJob(job) {
   renderCorrections(res.ocr_correction || {});
   renderConflicts(res.conflicts || []);
   renderArtifacts(job);
+  loadDimensions(job.id);
 
   // 3D part
   if (job.artifacts && job.artifacts.stl) loadSTL("/api/dwg/jobs/" + job.id + "/artifact/stl");
@@ -235,6 +267,34 @@ function renderArtifacts(job) {
   const links=names.filter(n=>a[n[0]]).map(n=>'<a href="/api/dwg/jobs/'+job.id+'/artifact/'+n[0]+'">'+n[1]+'</a>');
   host.innerHTML=links.length?links.join(""):'<span class="empty-note">—</span>';
 }
+
+/* ---- extracted-dimensions output section ------------------------------ */
+async function loadDimensions(id) {
+  let d;
+  try { d = await (await fetch("/api/dwg/jobs/" + id + "/dimensions")).json(); }
+  catch (e) { return; }
+  document.getElementById("dimsCount").textContent =
+    "· " + (d.n_geometry || 0) + " geometry · " + (d.n_extracted || 0) + " text";
+  const gt = document.querySelector("#geomDims tbody");
+  const g = d.geometry_dimensions || [];
+  gt.innerHTML = g.length ? g.map(r => {
+    const val = Array.isArray(r.value) ? "(" + r.value.map(x => (+x).toFixed(3)).join(", ") + ")"
+      : (r.value == null ? "—" : (+r.value).toFixed(3));
+    return '<tr><td>' + (r.feature || "") + '</td><td>' + r.dimension + '</td><td class="confirmed">' +
+      val + ' ' + (r.units || "") + '</td><td style="color:var(--ink-3)">' + (r.provenance || "") + '</td></tr>';
+  }).join("") : '<tr><td colspan="4" class="empty-note">none</td></tr>';
+
+  const tt = document.querySelector("#textDims tbody");
+  const t = d.extracted_text || [];
+  tt.innerHTML = t.length ? t.map(r => {
+    const tags = [r.typ ? "TYP" : "", r.thru ? "THRU" : "", r.deep ? "DP" : "",
+      r.count ? r.count + "×" : ""].filter(Boolean).join(" ");
+    return '<tr><td>' + escapeHtml(r.text || "") + '</td><td>' +
+      (r.value == null ? "—" : r.value) + '</td><td style="color:var(--ink-3)">' + r.kind +
+      (tags ? " " + tags : "") + '</td><td class="mono">(' + r.x_in + ", " + r.y_in + ")</td></tr>';
+  }).join("") : '<tr><td colspan="4" class="empty-note">none</td></tr>';
+}
+function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 
 /* ---- Three.js STL viewer ---------------------------------------------- */
 function loadSTL(url) {

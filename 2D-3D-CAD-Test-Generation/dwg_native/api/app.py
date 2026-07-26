@@ -76,6 +76,62 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "artifact file missing")
         return FileResponse(str(p), filename=p.name)
 
+    @app.get("/api/dwg/jobs/{jid}/sheet.pdf")
+    async def sheet_pdf(jid: str):
+        """The SolidWorks-rendered PDF of the imported drawing, served INLINE so
+        the UI can show it as a PDF view on the left."""
+        job = queue.get(jid)
+        if job is None or "sheet_pdf" not in job.artifacts:
+            raise HTTPException(404, "no sheet pdf")
+        p = Path(job.artifacts["sheet_pdf"])
+        if not p.is_file():
+            raise HTTPException(404, "sheet pdf missing")
+        return FileResponse(str(p), media_type="application/pdf",
+                            content_disposition_type="inline")
+
+    @app.get("/api/dwg/jobs/{jid}/dimensions")
+    async def dimensions(jid: str):
+        """Every dimension the DWG import produced: the exact MTEXT tokens (parsed)
+        and the geometry-derived build dimensions, each with provenance."""
+        job = queue.get(jid)
+        if job is None:
+            raise HTTPException(404, "no such job")
+        import json
+        from dwg_native.semantic.numbers import parse_number
+        raw_p = Path(job.artifacts.get("raw_extraction", ""))
+        bp_p = Path(job.artifacts.get("build_plan", ""))
+        extracted, geom = [], []
+        if raw_p.is_file():
+            raw = json.loads(raw_p.read_text(encoding="utf-8"))
+            factor = {"inch": 0.0254, "mm": 0.001, "cm": 0.01, "m": 1.0}.get(
+                raw.get("units_detected", "inch"), 0.0254)
+            for v in raw.get("views", []):
+                for t in v.get("text_tokens", []):
+                    pn = parse_number(t.get("text", ""))
+                    pos = t.get("position_2d_m") or [0, 0]
+                    extracted.append({
+                        "id": t.get("id"), "text": t.get("text"),
+                        "value": pn.value, "kind": pn.kind, "count": pn.count,
+                        "typ": pn.is_typical, "thru": pn.is_through, "deep": pn.is_depth,
+                        "x_in": round(pos[0] / factor, 3), "y_in": round(pos[1] / factor, 3),
+                    })
+        if bp_p.is_file():
+            bp = json.loads(bp_p.read_text(encoding="utf-8"))
+            for s in bp.get("steps", []):
+                pmap = s.get("provenance_map", {}) or {}
+                for k, val in (s.get("dimensions_drawing_units") or {}).items():
+                    geom.append({"feature": s.get("feature_id"), "type": s.get("type"),
+                                 "dimension": k, "value": val, "units": bp.get("units", "inch"),
+                                 "provenance": pmap.get(k, "")})
+                for pos in (s.get("positions_xy") or []):
+                    if s.get("type") == "hole":
+                        geom.append({"feature": s.get("feature_id"), "type": "hole",
+                                     "dimension": "position (x,y)", "value": pos,
+                                     "units": bp.get("units", "inch"),
+                                     "provenance": pmap.get("position", "")})
+        return {"extracted_text": extracted, "geometry_dimensions": geom,
+                "n_extracted": len(extracted), "n_geometry": len(geom)}
+
     @app.get("/api/dwg/jobs/{jid}/geometry")
     async def geometry(jid: str):
         """Exact extracted geometry + text for the 2D preview canvas — visual proof

@@ -128,6 +128,13 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
                                            encoding="utf-8")
     (out / f"{part_name}_build_result.json").write_text(json.dumps(result, indent=2),
                                                         encoding="utf-8")
+    # Close the built part now that .SLDPRT/.STL are on disk, so documents do not
+    # accumulate in the shared SolidWorks session across jobs.
+    try:
+        title = doc.GetTitle if isinstance(doc.GetTitle, str) else doc.GetTitle()
+        sw_app.CloseDoc(title)
+    except Exception:
+        pass
     return result
 
 

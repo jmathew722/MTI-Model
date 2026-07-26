@@ -53,6 +53,8 @@ def run_job(job: Job, session: Any, progress: Callable[[JobStatus, str], None]) 
                       extra_notes=imp.notes)
     raw_path = save_raw(raw, out / "raw_extraction.json")
     artifacts["raw_extraction"] = str(raw_path)
+    if imp.pdf_path and Path(imp.pdf_path).is_file():
+        artifacts["sheet_pdf"] = str(imp.pdf_path)
     session.close_doc(imp.doc_title)
 
     # 3. map (rules first) ------------------------------------------------- #
