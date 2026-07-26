@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DWG → SLDPRT · MTI</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="sheet">
+    <div class="topbar">
+      <div class="brand">DWG&nbsp;→&nbsp;SLDPRT <small>native import · exact geometry</small></div>
+      <button class="theme-toggle" id="themeToggle" type="button">◐ theme</button>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="drawing">
+        <span class="n">1</span>Drawing &amp; Part</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="inspection">
+        <span class="n">2</span>Inspection</button>
+    </div>
+
+    <!-- TAB 1 -------------------------------------------------------------- -->
+    <section class="panel" data-active="true" id="panel-drawing" role="tabpanel">
+      <div class="controls">
+        <div class="field">
+          <label for="fmt">Format</label>
+          <select id="fmt"><option value="dwg" selected>DWG</option>
+            <option value="dxf" disabled>DXF (soon)</option></select>
+        </div>
+        <div class="field">
+          <label for="sample">Test drawing</label>
+          <select id="sample"><option value="">— select a DWG —</option></select>
+        </div>
+        <button class="btn" id="runBtn" type="button" disabled>▶ Import &amp; Build</button>
+        <button class="btn ghost" id="refreshBtn" type="button">↻ Samples</button>
+      </div>
+
+      <div class="viewers">
+        <div class="viewer">
+          <h3>Imported drawing <span class="mono" id="drawStat">— exact geometry —</span></h3>
+          <div class="stage"><canvas id="drawingCanvas"></canvas>
+            <div class="empty" id="drawEmpty">no drawing loaded</div></div>
+        </div>
+        <div class="viewer">
+          <h3>Resulting part <span class="mono" id="partStat">— .STL —</span></h3>
+          <div class="stage"><div id="partView"></div>
+            <div class="empty" id="partEmpty">no part built</div></div>
+        </div>
+      </div>
+
+      <div class="traveler">
+        <h3>Build traveler</h3>
+        <div class="stages" id="stages"></div>
+        <div class="job-detail" id="jobDetail">idle — pick a drawing and run.</div>
+      </div>
+    </section>
+
+    <!-- TAB 2 -------------------------------------------------------------- -->
+    <section class="panel" id="panel-inspection" role="tabpanel">
+      <div class="report-head">
+        <div><h2>Inspection report</h2>
+          <div class="sub" id="inspSub">no run yet</div></div>
+        <div class="stamp pending" id="stamp">
+          <span class="big">—</span><span class="small">verification</span></div>
+      </div>
+
+      <div class="section"><h3>Verification gates</h3>
+        <div class="gates" id="gates">
+          <div class="empty-note">Run a drawing to populate the five gates.</div></div>
+      </div>
+
+      <div class="section"><h3>Dimension round-trip — built vs exact</h3>
+        <div class="scroll-x"><table class="insp" id="roundtrip">
+          <thead><tr><th>Check</th><th>Expected (m)</th><th>Measured (m)</th><th>Result</th></tr></thead>
+          <tbody><tr><td colspan="4" class="empty-note">—</td></tr></tbody></table></div>
+      </div>
+
+      <div class="section"><h3>OCR correction — vision vs DWG-exact</h3>
+        <div class="scroll-x"><table class="insp" id="corrections">
+          <thead><tr><th>Field</th><th>Vision</th><th>DWG exact</th><th>Δ</th><th>Decision</th></tr></thead>
+          <tbody><tr><td colspan="5" class="empty-note">—</td></tr></tbody></table></div>
+      </div>
+
+      <div class="section"><h3>Conflicts</h3>
+        <div id="conflicts"><div class="empty-note">No conflicts.</div></div>
+      </div>
+
+      <div class="section"><h3>Cost</h3>
+        <div class="cost" id="cost"><span class="zero">$0.00</span> — rules-first extraction; the LLM
+          is consulted only for genuine ambiguity, so most parts cost nothing.</div>
+      </div>
+
+      <div class="section"><h3>Artifacts</h3>
+        <div class="artifacts" id="artifacts"><span class="empty-note">—</span></div>
+      </div>
+    </section>
+
+    <!-- signature: the title block, lower-right ---------------------------- -->
+    <div class="titleblock" id="titleblock">
+      <div class="cell"><span class="k">Part No.</span><span class="v" id="tbPart">—</span></div>
+      <div class="cell"><span class="k">Units</span><span class="v" id="tbUnits">—</span></div>
+      <div class="cell"><span class="k">Holes</span><span class="v" id="tbHoles">—</span></div>
+      <div class="cell"><span class="k">Profile</span><span class="v" id="tbProfile">—</span></div>
+      <div class="cell wide"><span class="k">Source</span><span class="v">DWG native · SolidWorks import · exact geometry</span></div>
+      <div class="tb-stamp pending" id="tbStamp">— pending —</div>
+    </div>
+  </div>
+
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/vendor/STLLoader.js"></script>
+  <script src="/static/vendor/OrbitControls.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
