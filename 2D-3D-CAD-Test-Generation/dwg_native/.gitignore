@@ -1,0 +1,10 @@
+# Transient pipeline outputs and spike run dumps (evidence kept in spike/out_findings/).
+_jobs/
+spike/out/
+spike/out_final/
+spike/out_lowlevel/
+spike/out_v3/
+spike/*.DWG
+spike/*.dwg
+*_swconv.dxf
+__pycache__/
