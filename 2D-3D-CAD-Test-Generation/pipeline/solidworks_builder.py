@@ -438,23 +438,71 @@ def _origin_relation_for_rectangle(sw_doc) -> None:
 
 
 def check_rebuild_errors(sw_doc) -> bool:
-    """Check for rebuild errors/warnings after a feature. Returns True if clean."""
-    try:
-        errors = sw_doc.GetRebuildErrorCount() if hasattr(sw_doc, "GetRebuildErrorCount") else sw_doc.GetRebuildErrors()
-    except Exception:
-        # Older API name fallback.
-        errors = 0
-    try:
-        warnings = sw_doc.GetRebuildWarningCount() if hasattr(sw_doc, "GetRebuildWarningCount") else 0
-    except Exception:
-        warnings = 0
+    """Check for rebuild errors after a feature. Returns True if clean.
 
-    if errors and errors > 0:
-        log.error("REBUILD ERROR: %s error(s) detected.", errors)
+    ``GetRebuildErrorCount``/``GetRebuildErrors``/``GetRebuildWarningCount`` do
+    NOT resolve at all under this file's late-bound COM dispatch (verified live,
+    2026-07-28: every one raises ``AttributeError`` on this SolidWorks install) —
+    this function previously swallowed that into ``errors = 0`` and reported
+    "clean" on EVERY call, silently disabling the check entirely rather than
+    failing anything. The reliable, already-proven-in-this-file signal is
+    ``IModelDoc2.ForceRebuild3``'s own boolean return (used elsewhere in this
+    module to force a rebuild); its return value IS the rebuild-succeeded flag,
+    so this now forces the rebuild and reports that result directly. The old
+    error-count methods are still tried first (a no-op on this install, but
+    free extra signal on an install where they DO resolve) without ever being
+    allowed to silently fabricate a "clean" result on failure — the ONLY thing
+    that can now report clean is an ACTUAL rebuild that ran and reported no
+    error.
+    """
+    for getter in ("GetRebuildErrorCount", "GetRebuildErrors"):
+        try:
+            fn = getattr(sw_doc, getter, None)
+            if fn is None:
+                continue
+            errors = fn()
+            if isinstance(errors, (int, float)) and errors > 0:
+                log.error("REBUILD ERROR: %s error(s) detected (%s).", errors, getter)
+                return False
+        except Exception:
+            continue  # this getter doesn't resolve on this install — try the next
+
+    try:
+        ok = bool(sw_doc.ForceRebuild3(True))
+    except Exception as e:
+        # The rebuild call itself could not be made — this is NOT "clean", it is
+        # unknown, and unknown must not silently pass as success.
+        log.error("REBUILD CHECK FAILED: could not force a rebuild to verify (%s).", e)
         return False
-    if warnings and warnings > 0:
-        log.warning("REBUILD WARNING: %s warning(s) — continuing.", warnings)
-    return True
+    if not ok:
+        log.error("REBUILD ERROR: ForceRebuild3 reported failure.")
+    return ok
+
+
+def _total_volume(sw_doc) -> Optional[float]:
+    """Sum of every solid body's volume (m^3), via ``IBody2.GetMassProperties``.
+
+    Verified live (2026-07-28) to be reliable under this file's late-bound COM
+    setup — unlike ``CreateMassProperty``/``CreateMassProperty2`` (which return a
+    separate dispatched object that raises DISP_E_MEMBERNOTFOUND here, per the
+    note on _solid_body_exists), ``IBody2.GetMassProperties(accuracy)`` returns a
+    plain array (same shape of call as the already-proven ``GetBodyBox``) whose
+    index 3 is volume; confirmed against a known box volume to machine precision.
+    Returns None on any failure — this must never gate a build on its own."""
+    try:
+        bodies = sw_doc.GetBodies2(0, False)
+    except Exception:
+        return None
+    if not bodies:
+        return None
+    total = 0.0
+    try:
+        for b in bodies:
+            mp = b.GetMassProperties(0.001)
+            total += float(mp[3])
+    except Exception:
+        return None
+    return total
 
 
 def _solid_body_exists(sw_doc) -> bool:
@@ -1844,14 +1892,46 @@ def build_pattern(sw_doc, model, feature: Feature, dims: dict[str, float], featu
     assert_meters(spacing, f"{feature.id}.pattern_spacing")
     count = max(2, int(feature.quantity))
 
-    # Select the seed (last created feature) before patterning.
+    # Select the SEED feature before patterning — previously nothing was
+    # selected at all (ClearSelection2 then an immediate FeatureLinearPattern4
+    # call), so the API had no feature to pattern and either returned None or,
+    # worse, silently patterned whatever the LAST selection happened to be.
+    # Select by the held object reference (Select4 on the actual COM object
+    # feature_map already returned) rather than re-selecting by name — the
+    # research-backed pattern (SelectByID2 by name/coords is fragile; the
+    # object the create call returned is the reliable handle).
+    seed = feature_map.get(feature.parent_feature) if feature.parent_feature else None
+    if seed is None:
+        # Fall back to the most recently created feature in build order — still
+        # honest about the assumption via the raised error if selection fails.
+        seed = next(iter(reversed(feature_map.values())), None)
+    if seed is None:
+        raise SolidWorksError(f"pattern {feature.id}: no seed feature object available to select.")
     sw_doc.ClearSelection2(True)
+    try:
+        selected = seed.Select4(False, _null_dispatch())
+    except Exception as e:
+        selected = False
+        log.warning("%s: seed Select4 raised (%s)", feature.id, e)
+    if not selected:
+        raise SolidWorksError(
+            f"pattern {feature.id}: could not select its seed feature — "
+            "FeatureLinearPattern4 would pattern nothing.")
+
+    # NOTE: the direction reference (DName1) is left "NULL" with no additional
+    # edge/plane selected — SolidWorks then infers direction from the seed
+    # sketch's own dimension line in some versions, but this is NOT verified
+    # live against a genuine multi-axis linear pattern (the common qty>1 hole
+    # case is realized per-instance and short-circuits via _pattern_covered_by
+    # above, so this path is rare). If FeatureLinearPattern4 returns a feature
+    # here, its DIRECTION should still be verified against the drawing.
     feat = sw_doc.FeatureManager.FeatureLinearPattern4(
         count, spacing, 1, 0.0, False, False, "NULL", "NULL",
         False, False, False, False, False, False, False, False, 0, 0,
     )
     if feat is None:
-        raise SolidWorksError(f"FeatureLinearPattern4 returned None for {feature.id}.")
+        raise SolidWorksError(f"FeatureLinearPattern4 returned None for {feature.id} "
+                              "(seed was selected; direction reference may still be required).")
     return feat
 
 
@@ -1971,7 +2051,13 @@ def dispatch_feature_builder(sw_doc, model, feature: Feature, dims: dict[str, fl
 
 
 def _is_fragile(feature: Feature) -> bool:
-    return feature.type in (FeatureType.FILLET, FeatureType.CHAMFER, FeatureType.MIRROR)
+    # MIRROR is deliberately NOT in this set (2026-07-28): unlike a fillet/
+    # chamfer (cosmetic edge treatment — losing it leaves valid, just less
+    # refined, geometry), a failed mirror on a part modeled as "build one half
+    # + mirror" ships HALF the real part with only a buried warning. That is a
+    # body-defining failure, not a cosmetic one, and must follow the same
+    # deferred-retry / strict-abort path as any other structural feature.
+    return feature.type in (FeatureType.FILLET, FeatureType.CHAMFER)
 
 
 def save_model(sw_doc, name: str, output_dir: Optional[Path] = None) -> str:
@@ -2102,13 +2188,24 @@ def build_model(
             continue
         log.info("Building feature %s: %s", feature_id, feature.type.value)
 
+        # Post-feature geometric verification (2026-07-28): a non-None return +
+        # zero rebuild errors is NOT proof the geometry is correct — a blind cut
+        # aimed at the wrong side of the sketch plane, or a cut whose profile
+        # doesn't overlap the body, returns a valid feature object having removed
+        # NO material. Snapshot volume before or record the pending base build.
+        slot_for_feature = model.slot_cut_for_feature(feature_id)
+        vol_before = _total_volume(sw_doc) if (
+            feature.type in (FeatureType.EXTRUDE_CUT, FeatureType.HOLE) or slot_for_feature is not None
+        ) else None
+        body_existed_before = _solid_body_exists(sw_doc)
+
         try:
             try:
                 # Canonical slot / U-notch: build via the slot decomposition
                 # (rectangle + corner fillets), the SAME geometry as the VBA and
                 # CadQuery paths — never as a plain extrude_cut (which lands
                 # sharp-cornered and often off-solid). 2026-07-21.
-                slot = model.slot_cut_for_feature(feature_id)
+                slot = slot_for_feature
                 if slot is not None:
                     result = build_slot(sw_doc, model, feature, slot)
                 else:
@@ -2122,6 +2219,29 @@ def build_model(
 
             if result is None:
                 raise SolidWorksError(f"Feature builder returned None for {feature_id}.")
+
+            # A cut/hole/slot that removed no material "succeeds" (valid feature
+            # object, zero rebuild errors) but built nothing — exactly the C1
+            # blind-cut-wrong-direction hazard. Only asserted when BOTH volumes
+            # were readable (never gates on a measurement failure).
+            if result is not _NOOP and vol_before is not None:
+                vol_after = _total_volume(sw_doc)
+                if vol_after is not None and vol_after >= vol_before - max(1e-12, vol_before * 1e-6):
+                    raise SolidWorksError(
+                        f"{feature_id} ({feature.type.value}) reported success but removed no "
+                        f"material (volume before={vol_before:.9g} m^3, after={vol_after:.9g} m^3) "
+                        "— the cut profile likely does not overlap the body, or a blind cut is "
+                        "aimed at the wrong side of the sketch plane.")
+
+            # An extrude_boss must either create the first body or grow the
+            # existing one — a boss that "succeeds" without adding volume is the
+            # additive-side counterpart of the cut check above.
+            if (result is not _NOOP and feature.type == FeatureType.EXTRUDE_BOSS
+                    and not body_existed_before and not _solid_body_exists(sw_doc)):
+                raise SolidWorksError(
+                    f"{feature_id} (extrude_boss) reported success but no solid body exists "
+                    "afterward.")
+
             if result is _NOOP:
                 # Intentional no-op (redundant pattern / cosmetic thread): success,
                 # but no feature object to record or count.
