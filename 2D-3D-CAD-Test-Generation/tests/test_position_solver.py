@@ -88,6 +88,50 @@ def test_far_edge_baseline_measures_back_from_right_and_top():
     assert any("part_edge_right" in t and "-" in t for t in sol.trace)
 
 
+def test_to_far_edge_semantics_adjusts_by_the_feature_own_extent():
+    """A dimension that locates the FAR side of a feature (e.g. a slot dimensioned
+    to its far wall) must be converted to the near-edge placement coordinate using
+    the feature's own linked width — previously `semantics` was read but never
+    acted on, so a to_far_edge dimension silently placed the feature off by its
+    own size (2026-07-28 fix)."""
+    m = _model(
+        dimensions=[
+            {"id": "D001", "type": "linear", "value": 11.0, "unit": "inch",
+             "applies_to": "length"},
+            {"id": "D002", "type": "linear", "value": 6.25, "unit": "inch",
+             "applies_to": "width"},
+            {"id": "D010", "type": "linear", "value": 2.0, "unit": "inch",
+             "applies_to": "width"},   # F002's own extent along x/y
+        ],
+        features=[
+            {"id": "F002", "type": "extrude_cut", "description": "slot",
+             "offset_x": 0.0, "offset_y": 0.0,
+             "related_dimensions": ["D010"],
+             "anchors": [
+                 _anchor("baseline", "part_edge_left", "x", 5.0, ["D003"],
+                         semantics="to_far_edge"),
+                 _anchor("baseline", "part_edge_bottom", "y", 2.0, ["D004"]),
+             ]},
+        ])
+    sol = solve_positions(m)["F002"]
+    # to_far_edge at x=5.0 with a 2.0-wide feature -> near edge lands at 3.0.
+    assert sol.x == pytest.approx(5.0 - 2.0)
+    assert any("to_far_edge" in t for t in sol.trace)
+
+
+def test_to_far_edge_without_known_extent_flags_but_never_blocks():
+    m = _model(features=[
+        _feat("F002", anchors=[
+            _anchor("baseline", "part_edge_left", "x", 5.0, ["D003"],
+                    semantics="to_far_edge"),
+            _anchor("baseline", "part_edge_bottom", "y", 2.0, ["D004"]),
+        ]),
+    ])
+    sol = solve_positions(m)["F002"]
+    assert sol.grounded  # never blocks
+    assert any("extent UNKNOWN" in t for t in sol.trace)
+
+
 # --------------------------------------------------------------------------- #
 # Chain-dimensioned strip: accumulation + correction propagation
 # --------------------------------------------------------------------------- #

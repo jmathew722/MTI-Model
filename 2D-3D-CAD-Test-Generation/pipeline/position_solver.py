@@ -150,6 +150,24 @@ def _envelope(model: DrawingData) -> tuple[Optional[float], Optional[float]]:
     return length, width
 
 
+_EXTENT_TOKENS_X = ("width", "diameter", "hole_diameter", "slot_width", "length")
+_EXTENT_TOKENS_Y = ("height", "diameter", "hole_diameter", "slot_width", "width")
+
+
+def _feature_extent(feat: Feature, model: DrawingData, axis: str) -> Optional[float]:
+    """The feature's OWN size along ``axis``, from its linked dimensions — used to
+    convert a ``to_far_edge`` anchor (which locates the far side of the feature)
+    into the near-edge coordinate the rest of the pipeline places from. Returns
+    None when no matching dimension is linked (caller must not silently misplace;
+    it flags instead)."""
+    tokens = _EXTENT_TOKENS_X if axis == "x" else _EXTENT_TOKENS_Y
+    ids = set(feat.related_dimensions or [])
+    for d in model.dimensions:
+        if d.id in ids and d.canonical_applies_to in tokens and d.value:
+            return float(d.value)
+    return None
+
+
 def _feature_deps(anchors: list[PositionAnchor]) -> set[str]:
     """Feature ids this anchor set depends on (chain targets, polar centers,
     datum holes resolved to hole feature_refs are handled by the caller)."""
@@ -244,8 +262,20 @@ def _solve_one(feat: Feature, anchors: list[PositionAnchor], model: DrawingData,
         sign = -1.0 if a.anchor_ref == "part_edge_top" and a.axis == "y" else sign
         val = base + sign * a.value
         dim = ",".join(a.dimension_ids) or _fmt(a.value)
+        semantics_note = ""
+        # to_far_edge: the dimension locates the FEATURE'S FAR side, not its near
+        # edge/placement point — convert using the feature's own linked extent
+        # (previously ignored entirely, silently treating far-edge dims as
+        # near-edge and mis-placing by the feature's own size).
+        if a.semantics == "to_far_edge":
+            extent = _feature_extent(feat, model, a.axis)
+            if extent is not None:
+                val -= sign * extent
+                semantics_note = f" - extent({_fmt(extent)}) [to_far_edge]"
+            else:
+                semantics_note = " [to_far_edge, extent UNKNOWN — using far-edge value as-is, verify]"
         trace.append(f"{a.axis} = {base_name}({_fmt(base)}) "
-                     f"{'-' if sign < 0 else '+'} {dim}({_fmt(a.value)}) [{a.scheme}]")
+                     f"{'-' if sign < 0 else '+'} {dim}({_fmt(a.value)}){semantics_note} [{a.scheme}]")
         schemes.append(a.scheme)
         if a.axis == "x":
             x = val

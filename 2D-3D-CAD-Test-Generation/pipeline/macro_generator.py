@@ -1520,7 +1520,7 @@ def _macro_fillet_chamfer(model: DrawingData, features: list[Feature], step: str
                 body += f"\n    ' {f.id}: radius not linked to the feature; using {src_id}=R{_v(radius)} from the drawing - VERIFY.\n"
             used[f"{f.id}_radius"] = radius
             body += f"""
-    ' ---- {f.id}: FILLET R{_v(radius)} ({f.description}) ----
+    ' ---- {f.id}: FILLET R{_v(radius)} ({_vba_str(f.description)}) ----
     If swSelMgr.GetSelectedObjectCount2(-1) = 0 Then
         MsgBox "Select the edge(s) for fillet {f.id} (R{_v(radius)}), then run again.", vbExclamation
         LogResult "WARN", "{step}", "{f.id} fillet skipped - no edges selected"
@@ -1553,7 +1553,7 @@ def _macro_fillet_chamfer(model: DrawingData, features: list[Feature], step: str
             used[f"{f.id}_distance"] = distance
             used[f"{f.id}_angle_deg"] = angle
             body += f"""
-    ' ---- {f.id}: CHAMFER {_v(distance)} x {_v(angle)}deg ({f.description}) ----
+    ' ---- {f.id}: CHAMFER {_v(distance)} x {_v(angle)}deg ({_vba_str(f.description)}) ----
     If swSelMgr.GetSelectedObjectCount2(-1) = 0 Then
         MsgBox "Select the edge(s) for chamfer {f.id} ({_v(distance)} x {_v(angle)}deg), then run again.", vbExclamation
         LogResult "WARN", "{step}", "{f.id} chamfer skipped - no edges selected"
@@ -1579,7 +1579,7 @@ def _macro_revolve_skeleton(feature: Feature, step: str) -> str:
     ' geometry, which cannot be reliably synthesized from dimensions alone.
     ' Build manually: sketch the half-profile on {_plane_for(feature)}, add a
     ' centerline on the revolve axis, then Insert > Boss/Base > Revolve (360 deg).
-    ' Extracted description: {feature.description}
+    ' Extracted description: {_vba_str(feature.description)}
     MsgBox "Feature {feature.id} (revolve) requires manual modeling - see macro comments.", vbInformation
     LogResult "WARN", "{step}", "{feature.id} revolve requires manual modeling"
 """
@@ -1627,7 +1627,7 @@ def _macro_coverage_skeleton(feature: Feature, step: str, need: str) -> str:
     are carried for manual modeling (the revolve-skeleton precedent)."""
     return f"""    ' TODO: VERIFY API CALL — {feature.type.value} {feature.id}
     ' A {feature.type.value} needs {need}, which a 2D drawing does not supply.
-    ' Build manually in SolidWorks using the drawing. Description: {feature.description}
+    ' Build manually in SolidWorks using the drawing. Description: {_vba_str(feature.description)}
     MsgBox "Feature {feature.id} ({feature.type.value}) requires manual modeling - see macro comments.", vbInformation
     LogResult "WARN", "{step}", "{feature.id} {feature.type.value} requires manual modeling"
 """
@@ -3120,7 +3120,7 @@ def generate_macro_package(
                 body = _macro_holes(model, feature, step_name)[0] if model.hole_callout_for_feature(feature.id) else ""
                 if not body:
                     body = f"""    ' TODO: VERIFY API CALL — cosmetic thread for {feature.id}
-    ' Apply via Insert > Annotations > Cosmetic Thread. {feature.description}
+    ' Apply via Insert > Annotations > Cosmetic Thread. {_vba_str(feature.description)}
     LogResult "WARN", "{step_name}", "{feature.id} cosmetic thread - apply manually"
 """
                 status, notes = "needs_review", "Cosmetic thread step requires manual verification."

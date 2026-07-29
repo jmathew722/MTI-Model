@@ -96,6 +96,44 @@ class AuditReport:
         }
 
 
+# SwConst enum members the generator is KNOWN to emit (kept in sync with
+# macro_generator + macro_templates). Any sw*_e.member token NOT here is flagged
+# WARN so a typo'd/nonexistent enum member is caught before it reaches SolidWorks
+# as a silent compile error (audit only checked Sub/Function balance before).
+_KNOWN_ENUM_MEMBERS = frozenset({
+    "swBodyType_e.swSolidBody",
+    "swEndConditions_e.swEndCondBlind",
+    "swEndConditions_e.swEndCondThroughAll",
+    "swEndConditions_e.swEndCondThroughAllBoth",
+    "swFeatureFilletOptions_e.swFeatureFilletPropagate",
+    "swMessageBoxBtn_e.swMbOk",
+    "swMessageBoxIcon_e.swMbStop",
+    "swSaveAsOptions_e.swSaveAsOptions_Silent",
+    "swStartConditions_e.swStartSketchPlane",
+    "swUnitSystem_e.swUnitSystem_IPS",
+    "swUnitSystem_e.swUnitSystem_MMGS",
+    "swUserPreferenceIntegerValue_e.swUnitSystem",
+    "swUserPreferenceOption_e.swDetailingNoOptionSpecified",
+    "swUserPreferenceStringValue_e.swDefaultTemplatePart",
+    "swUserPreferenceStringValue_e.swFileLocationsDocumentTemplates",
+})
+_ENUM_MEMBER_RE = re.compile(r"\bsw[A-Za-z0-9]+_e\.[A-Za-z0-9_]+")
+
+# (open-regex, close-regex, human name). NOTE: ``If``/``End If`` is deliberately
+# NOT balance-checked — VBA single-line ifs and multi-line (line-continuation)
+# conditions make a regex If-count unreliable, and a false positive would BLOCK a
+# valid part (worse than not checking). For/Do/With rarely use those forms in the
+# generated code, so their balance is a safe, real signal.
+_BLOCK_PAIRS = [
+    (re.compile(r"^\s*For\b", re.IGNORECASE | re.MULTILINE),
+     re.compile(r"^\s*Next\b", re.IGNORECASE | re.MULTILINE), "For/Next"),
+    (re.compile(r"^\s*Do\b", re.IGNORECASE | re.MULTILINE),
+     re.compile(r"^\s*Loop\b", re.IGNORECASE | re.MULTILINE), "Do/Loop"),
+    (re.compile(r"^\s*With\b", re.IGNORECASE | re.MULTILINE),
+     re.compile(r"^\s*End\s+With\b", re.IGNORECASE | re.MULTILINE), "With/End With"),
+]
+
+
 def audit_text(filename: str, text: str) -> list[Finding]:
     """Audit a single macro's source text. Returns all findings for it."""
     findings: list[Finding] = []
@@ -136,6 +174,25 @@ def audit_text(filename: str, text: str) -> list[Finding]:
                 "warn", "STRUCT", filename,
                 "Feature macro never calls LogResult — no PASS/FAIL trail.",
             ))
+        # 5) Balanced control-flow blocks (unbalanced If/For/Do/With is a compile
+        # error that used to ship undetected through hand-concatenated VBA).
+        for open_re, close_re, name in _BLOCK_PAIRS:
+            n_open = len(open_re.findall(text))
+            n_close = len(close_re.findall(text))
+            if n_open != n_close:
+                findings.append(Finding(
+                    "error", "STRUCT", filename,
+                    f"Unbalanced {name} ({n_open} open, {n_close} close).",
+                ))
+        # 6) Enum-member validation — a typo'd sw*_e member compiles-errors on the
+        # SolidWorks machine only; flag any member not on the known-good list.
+        for member in sorted(set(_ENUM_MEMBER_RE.findall(text))):
+            if member not in _KNOWN_ENUM_MEMBERS:
+                findings.append(Finding(
+                    "warn", "ENUM", filename,
+                    f"Unrecognized SwConst enum member '{member}' — verify it exists "
+                    "in the installed swconst (or add it to _KNOWN_ENUM_MEMBERS).",
+                ))
     return findings
 
 
