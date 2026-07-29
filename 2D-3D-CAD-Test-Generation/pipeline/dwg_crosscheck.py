@@ -27,8 +27,23 @@ from typing import Any, Dict, List, Optional, Tuple
 log = logging.getLogger("pipeline.dwg_crosscheck")
 
 _UNIT_FACTOR = {"inch": 0.0254, "mm": 0.001, "cm": 0.01, "m": 1.0, "feet": 0.3048}
-CONFIRM_TOL = 0.01        # within this (drawing units) the OCR value is confirmed
-_MIN_CORRECT_WINDOW = 0.15  # a nearest exact value within this snaps (misread), else unverified
+# Three tiers, because numeric proximity ALONE cannot distinguish a digit-misread
+# of value X from a genuinely different dimension Y (the reason the old flat 0.15"
+# snap window corrupted correct readings, e.g. .25 -> .38):
+#   * CONFIRM  (<= 0.005"): the OCR read matches a DWG value -> mark certain.
+#   * AUTO-CORRECT (<= 0.03"): a tiny discrepancy (rounding / last-digit noise) is
+#     snapped to the exact DWG value, but only if kind-matched, unambiguous, and
+#     one-to-one.
+#   * DISCREPANCY (0.03"..0.75"): a larger mismatch is FLAGGED for human review and
+#     the DWG value is added to possible_values — the OCR value is NOT silently
+#     changed (that would risk corrupting a correct reading).
+#   * UNVERIFIED: no exact value of the right kind is near.
+CONFIRM_TOL = 0.005
+AUTO_CORRECT_TOL = 0.03
+DISCREPANCY_TOL = 0.75
+# The nearest exact value must be this many times closer than the 2nd-nearest to be
+# treated as unambiguous — otherwise the reading is left UNVERIFIED, never snapped.
+_UNIQUENESS_RATIO = 2.0
 
 # In-process cache so the OCR-render import and the cross-check import are ONE
 # SolidWorks import per DWG per run. Keyed by (resolved path, mtime).
@@ -40,7 +55,9 @@ class DwgGroundTruth:
     dwg_path: str
     units: str = "inch"
     pdf_path: Optional[str] = None            # SolidWorks-rendered sheet (OCR input)
-    exact_values: List[float] = field(default_factory=list)   # drawing units
+    exact_values: List[float] = field(default_factory=list)   # drawing units (all)
+    length_values: List[float] = field(default_factory=list)  # kind-separated pools
+    diameter_values: List[float] = field(default_factory=list)
     text_values: List[Tuple[str, float]] = field(default_factory=list)
     circle_diameters: List[float] = field(default_factory=list)
     n_text: int = 0
@@ -99,14 +116,29 @@ def get_ground_truth(dwg_path: str | Path, work_dir: str | Path,
     factor = _UNIT_FACTOR.get(raw.units_detected, 0.0254)
     gt.units = raw.units_detected
     gt.pdf_path = str(imp.pdf_path) if getattr(imp, "pdf_path", None) else None
+    # Bucket exact values BY KIND so a length can never snap to a diameter, and
+    # exclude counts/tolerances/notes (which polluted the flat snap pool).
     for t in raw.all_text():
         pn = parse_number(t.text)
-        if pn.numeric and pn.value is not None and 0 < abs(pn.value) < 500:
-            gt.text_values.append((t.text, round(pn.value, 4)))
+        if not (pn.numeric and pn.value is not None):
+            continue
+        v = round(pn.value, 4)
+        if not (0 < abs(v) < 500) or pn.count is not None:
+            continue
+        gt.text_values.append((t.text, v))
+        if pn.kind == "diameter":
+            gt.diameter_values.append(v)
+        elif pn.kind == "length":
+            gt.length_values.append(v)
+        # radius/tolerance/note kinds are recorded in text_values but not as snap targets
     for g in raw.all_geometry():
         if g.type == "circle" and g.radius_m:
-            gt.circle_diameters.append(round(2 * g.radius_m / factor, 4))
-    gt.exact_values = sorted({v for _, v in gt.text_values} | set(gt.circle_diameters))
+            d = round(2 * g.radius_m / factor, 4)
+            gt.circle_diameters.append(d)
+            gt.diameter_values.append(d)
+    gt.length_values = sorted(set(gt.length_values))
+    gt.diameter_values = sorted(set(gt.diameter_values))
+    gt.exact_values = sorted(set(gt.length_values) | set(gt.diameter_values))
     gt.n_text = len(gt.text_values)
     gt.n_circles = len(gt.circle_diameters)
     gt.available = bool(gt.exact_values)
@@ -129,57 +161,111 @@ def _nearest(value: float, exact: List[float]) -> Optional[Tuple[float, float]]:
     return best
 
 
+def _two_nearest(value: float, pool: List[float]):
+    """Return the two smallest distances (nearest, second) to values in ``pool``."""
+    ds = sorted((abs(e - value), e) for e in pool)
+    nearest = ds[0] if ds else None
+    second = ds[1][0] if len(ds) > 1 else None
+    return nearest, second
+
+
 def crosscheck_and_correct(drawing_data: Dict[str, Any], gt: DwgGroundTruth) -> Dict[str, Any]:
-    """Cross-check every OCR dimension + hole diameter against the exact DWG
-    values, correcting misreads in place. Returns a report dict. Mutates
-    ``drawing_data`` (values snapped to exact, notes + provenance appended)."""
+    """Cross-check OCR dimensions + hole diameters against KIND-MATCHED exact DWG
+    values and correct clear misreads in place. Mutates ``drawing_data``. Safe by
+    construction:
+      * a dimension only matches LENGTH values, a hole only matches DIAMETER values
+        (a length can never snap to a diameter);
+      * a CONFIRM needs a tight (<=0.005") match; a CORRECTION needs the nearest
+        exact value to be within a modest window AND unambiguously closer than the
+        2nd-nearest (uniqueness ratio), AND not already claimed by another
+        correction (one-to-one) — otherwise the reading is left UNVERIFIED;
+      * ``value_unclear`` is cleared ONLY on a confirm, never on a correction
+        (a corrected value is flagged for review, not asserted certain).
+    Never fabricates and never blocks."""
     report: Dict[str, Any] = {
         "source": "dwg_crosscheck", "units": gt.units,
         "exact_value_count": len(gt.exact_values),
-        "confirmed": [], "corrected": [], "unverified": [], "dwg_only": [],
+        "length_pool": len(gt.length_values), "diameter_pool": len(gt.diameter_values),
+        "confirmed": [], "corrected": [], "discrepancies": [], "unverified": [], "dwg_only": [],
     }
     matched_exact: set = set()
 
-    def _check(kind: str, ident: str, holder: Dict[str, Any], field_name: str) -> None:
-        v = holder.get(field_name)
-        if not isinstance(v, (int, float)) or v <= 0:
-            return
-        near = _nearest(float(v), gt.exact_values)
-        if near is None:
-            report["unverified"].append({"kind": kind, "id": ident, "value": v,
-                                         "reason": "no exact DWG values"})
-            return
-        dist, e = near
-        window = max(_MIN_CORRECT_WINDOW, 0.05 * abs(v))
-        if dist <= CONFIRM_TOL:
-            matched_exact.add(e)
-            report["confirmed"].append({"kind": kind, "id": ident, "value": round(v, 4),
-                                        "dwg": e})
-            if holder.get("value_unclear"):
-                holder["value_unclear"] = False
-        elif dist <= window:
-            matched_exact.add(e)
-            old = round(float(v), 4)
-            holder[field_name] = e
-            holder["value_unclear"] = False
-            note = (f"[DWG-verified] OCR read {old}; SolidWorks import shows {e}; "
-                    "corrected to the exact DWG value.")
-            holder["notes"] = (str(holder.get("notes", "")) + " " + note).strip()
-            report["corrected"].append({"kind": kind, "id": ident, "ocr": old,
-                                        "dwg": e, "delta": round(e - old, 4)})
-        else:
-            report["unverified"].append({"kind": kind, "id": ident, "value": round(v, 4),
-                                         "nearest_dwg": e, "distance": round(dist, 4)})
-
+    items = []
     for d in drawing_data.get("dimensions", []) or []:
-        _check("dimension", d.get("id", "?"), d, "value")
+        items.append(("dimension", d.get("id", "?"), d, "value", gt.length_values))
     for h in drawing_data.get("hole_callouts", []) or []:
-        _check("hole_diameter", h.get("id", "?"), h, "diameter")
+        items.append(("hole_diameter", h.get("id", "?"), h, "diameter", gt.diameter_values))
+
+    # Pass 1 — confirmations (tight, kind-matched). Many readings may confirm the
+    # same exact value (e.g. two identical holes), so confirms do not consume.
+    pending = []
+    for kind, ident, holder, fld, pool in items:
+        v = holder.get(fld)
+        if not isinstance(v, (int, float)) or v <= 0:
+            continue
+        if not pool:
+            report["unverified"].append({"kind": kind, "id": ident, "value": round(float(v), 4),
+                                         "reason": f"no exact {kind} values in the DWG"})
+            continue
+        near, second = _two_nearest(float(v), pool)
+        if near and near[0] <= CONFIRM_TOL:
+            matched_exact.add(near[1])
+            report["confirmed"].append({"kind": kind, "id": ident, "value": round(float(v), 4),
+                                        "dwg": near[1]})
+            if holder.get("value_unclear"):
+                holder["value_unclear"] = False   # OCR verified correct -> now certain
+        else:
+            pending.append((kind, ident, holder, fld, float(v), near, second))
+
+    # Pass 2 — corrections + discrepancies (unambiguous, one-to-one). Closest first.
+    pending.sort(key=lambda p: p[5][0] if p[5] else 1e9)
+    used_for_correction: set = set()
+    for kind, ident, holder, fld, v, near, second in pending:
+        if near is None:
+            report["unverified"].append({"kind": kind, "id": ident, "value": round(v, 4),
+                                         "reason": "no exact value of this kind"})
+            continue
+        dist, e = near
+        unambiguous = second is None or second > _UNIQUENESS_RATIO * dist
+        old = round(v, 4)
+        if not unambiguous:
+            report["unverified"].append({"kind": kind, "id": ident, "value": old,
+                                         "nearest_dwg": e, "distance": round(dist, 4),
+                                         "reason": "ambiguous (two exact values equally near)"})
+        elif dist <= AUTO_CORRECT_TOL and e not in used_for_correction:
+            # Tiny discrepancy -> snap to exact (rounding / last-digit noise).
+            holder[fld] = e
+            note = (f"[DWG-verified] OCR read {old}; DWG exact {e}; auto-corrected "
+                    f"(within {AUTO_CORRECT_TOL} in).")
+            holder["notes"] = (str(holder.get("notes", "")) + " " + note).strip()
+            # value_unclear is intentionally NOT cleared on a correction.
+            used_for_correction.add(e)
+            matched_exact.add(e)
+            report["corrected"].append({"kind": kind, "id": ident, "ocr": old, "dwg": e,
+                                        "delta": round(e - old, 4)})
+        elif dist <= DISCREPANCY_TOL:
+            # Larger mismatch -> FLAG for review, do NOT silently change the value.
+            # Offer the DWG value to the resolver/human via possible_values.
+            pv = holder.get("possible_values") or []
+            if e not in pv:
+                pv = [old, e] if not pv else pv + [e]
+            holder["possible_values"] = pv
+            holder["value_unclear"] = True
+            note = (f"[DWG-conflict] OCR read {old} but the SolidWorks DWG import shows "
+                    f"{e} ({round(abs(e - old), 4)}\" apart) — needs human review; value NOT "
+                    "auto-changed.")
+            holder["notes"] = (str(holder.get("notes", "")) + " " + note).strip()
+            matched_exact.add(e)
+            report["discrepancies"].append({"kind": kind, "id": ident, "ocr": old, "dwg": e,
+                                            "delta": round(e - old, 4)})
+        else:
+            report["unverified"].append({"kind": kind, "id": ident, "value": old,
+                                         "nearest_dwg": e, "distance": round(dist, 4),
+                                         "reason": "no exact value within review range"})
 
     # Exact values that never matched any OCR reading -> possible OCR misses.
-    tol = CONFIRM_TOL
     for e in gt.exact_values:
-        if all(abs(e - m) > tol for m in matched_exact):
+        if all(abs(e - m) > CONFIRM_TOL for m in matched_exact):
             report["dwg_only"].append(e)
 
     report["summary"] = (

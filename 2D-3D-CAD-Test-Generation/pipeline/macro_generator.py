@@ -1413,15 +1413,15 @@ def _macro_holes(model: DrawingData, feature: Feature, step: str) -> tuple[str, 
     if h.type == HoleType.COUNTERSINK and h.csink_diameter > 0:
         csk_ang = h.csink_angle or 90.0
         used["csink_diameter"], used["csink_angle"] = h.csink_diameter, csk_ang
-        if h.csink_diameter <= diameter:
+        if h.csink_diameter <= h.diameter:
             body += f"""
-    ' Countersink dia {_v(h.csink_diameter)} is not larger than the hole {_v(diameter)} —
+    ' Countersink dia {_v(h.csink_diameter)} is not larger than the hole {_v(h.diameter)} —
     ' skipped (sanity gate: not a real countersink stack).
     LogResult "WARN", "{step}", "Countersink dia <= hole dia; skipped (sanity gate)"
 """
         else:
             import math as _m
-            cone_depth = ((h.csink_diameter - diameter) / 2.0) / max(
+            cone_depth = ((h.csink_diameter - h.diameter) / 2.0) / max(
                 _m.tan(_m.radians(csk_ang / 2.0)), 1e-6)
             used["csink_depth"] = round(cone_depth, 4)
             body += f"""
@@ -3169,6 +3169,21 @@ def generate_macro_package(
     ' This feature could not be scripted from the extracted data - build manually.
     MsgBox "Feature {feature.id}: {msg}", vbExclamation
     LogResult "WARN", "{step_name}", "Not scripted: {msg}"
+"""
+        except Exception as e:  # noqa: BLE001
+            # A builder BUG (e.g. an unbound-variable path) must never crash the
+            # whole run — the guiding principle is a complete approximate model
+            # with the failure flagged, never a hard stop. Degrade this one
+            # feature to a MANUAL step and keep generating the rest.
+            import traceback as _tb
+            _tb.print_exc()
+            status = "needs_review"
+            notes = f"builder error ({type(e).__name__}): {e}"
+            msg = _vba_str(f"{type(e).__name__}: {e}")
+            body = f"""    ' GENERATION ERROR (unexpected builder failure): {msg}
+    ' A code path failed to script this feature - build it manually.
+    MsgBox "Feature {feature.id} could not be generated: {msg}", vbExclamation
+    LogResult "WARN", "{step_name}", "Builder error: {msg}"
 """
 
         # Stage 2.5: emit assumption-flag behavior (NOTE/MsgBox/confirmation) at

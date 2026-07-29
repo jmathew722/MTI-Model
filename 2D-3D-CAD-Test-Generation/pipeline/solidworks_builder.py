@@ -2089,8 +2089,17 @@ def build_model(
             })
 
     for feature_id in model.build_order:
-        feature = get_feature_by_id(model, feature_id)
-        dims = get_dimensions_for_feature(model, feature)
+        # A missing feature/dimension reference must NOT abort the whole part —
+        # skip just this one feature and keep building the rest (the "never block,
+        # resolve-and-flag" principle). Previously these lookups sat outside the
+        # per-feature try, so one dropped reference lost the entire build.
+        try:
+            feature = get_feature_by_id(model, feature_id)
+            dims = get_dimensions_for_feature(model, feature)
+        except SolidWorksError as e:
+            log.warning("Skipping feature %s (reference lookup failed): %s", feature_id, e)
+            _record(feature_id, "unknown", "FAIL", f"reference lookup failed: {e}")
+            continue
         log.info("Building feature %s: %s", feature_id, feature.type.value)
 
         try:

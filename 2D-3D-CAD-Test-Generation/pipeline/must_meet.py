@@ -166,7 +166,22 @@ _COUNT_HOLES_RE = re.compile(r"(\d+)\s*(?:x\s*)?holes?\b", re.IGNORECASE)
 _OFFSET_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:in(?:ch(?:es)?)?\.?\s*)?"
                         r"(?:from|off)\s+the\s+cent", re.IGNORECASE)
 _THRU_RE = re.compile(r"th(?:ro?u|rough)[\s-]*all", re.IGNORECASE)
+# Blind depth callout: ".50 DP", "0.5 DEEP", "deep .50" -> captures the value.
+_DEEP_RE = re.compile(
+    r"(?:(\d+(?:\.\d+)?|\.\d+)\s*(?:in(?:ch(?:es)?)?\.?\s*)?(?:dp|deep)\b"
+    r"|(?:dp|deep)\s*(\d+(?:\.\d+)?|\.\d+))", re.IGNORECASE)
 _VIEW_RE = re.compile(r"\b(front|side|top|bottom|back|right|left)\s+view", re.IGNORECASE)
+
+
+def _depth_in(clause: str) -> Optional[float]:
+    m = _DEEP_RE.search(clause)
+    if not m:
+        return None
+    val = m.group(1) or m.group(2)
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def parse_spec_text_fallback(text: str) -> list[dict]:
@@ -204,8 +219,13 @@ def parse_spec_text_fallback(text: str) -> list[dict]:
                 "type": "cut_extrude",
                 "shape": "circle",
                 "diameter_in": float(m_dia.group(1)),
-                "end_condition": "through_all" if thru else "through_all",
+                # A cut is through-all only when the text says so; otherwise it is
+                # BLIND (previously a copy-paste typo forced every cut through).
+                "end_condition": "through_all" if thru else "blind",
             }
+            _dep = _depth_in(clause)
+            if not thru and _dep is not None:
+                c["depth_in"] = _dep
             m_off = _OFFSET_RE.search(clause)
             if m_off:
                 pos: dict[str, Any] = {"offset_in": float(m_off.group(1))}
@@ -482,11 +502,16 @@ def apply_must_meet(extraction: dict, constraints: list[dict], *,
                 x, y = x + dx, y + dy
                 position_known = True
         new_id = c["id"].replace("-", "")
+        # Honor the spec's end condition: a blind cut synthesizes as blind with
+        # its stated depth, not a forced through-hole.
+        is_blind = c.get("end_condition") == "blind"
+        depth_val = float(c.get("depth_in") or 0.0) if is_blind else 0.0
         holes.append({
             "id": new_id,
-            "type": "thru",
+            "type": "blind" if is_blind else "thru",
             "diameter": dia,
-            "thru": True,
+            "depth": depth_val,
+            "thru": not is_blind,
             "qty": 1,
             "x_position": round(x, 6),
             "y_position": round(y, 6),
