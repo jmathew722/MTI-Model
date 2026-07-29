@@ -41,9 +41,23 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from pipeline.macro_generator import PLANE_INDEX, PLANE_NAMES
 from utils.logger import get_logger
 
 log = get_logger()
+
+
+def _resolve_plane(sketch_plane_label: str) -> tuple[str, int]:
+    """(plane_name, plane_index) from a raw sketch_plane label — the SAME
+    mapping macro_generator.py uses for the VBA path (PLANE_NAMES/PLANE_INDEX,
+    imported not duplicated). Previously this emitter passed the RAW unmapped
+    label (e.g. "top", "right") straight to SelectPlane with a HARDCODED index
+    of 1: SelectByID2 never matched (needs the real name "Top Plane"), so every
+    C# build silently fell back to the 1st reference plane in the tree — Front
+    Plane — regardless of which plane was intended, building side/top cuts on
+    the wrong plane with no error (2026-07-28 fix)."""
+    name = PLANE_NAMES.get((sketch_plane_label or "front").lower().strip(), "Front Plane")
+    return name, PLANE_INDEX.get(name, 1)
 
 CSHARP_DIR_NAME = "macros_csharp"
 
@@ -116,7 +130,7 @@ def _emit_solid_step(step, is_cut: bool) -> str:
     if not ok:
         return _emit_manual(step, "no scriptable profile (diameter or length+width) "
                                   "in the extracted data — build manually")
-    plane = _cs_str(step.sketch_plane or "Front Plane", 40)
+    plane, plane_idx = _resolve_plane(step.sketch_plane)
     depth = (step.dimensions or {}).get("depth")
     thru = (step.depth_type == "through_all") or (is_cut and depth is None)
     depth_expr = _num(depth) if depth is not None else "0"
@@ -125,7 +139,7 @@ def _emit_solid_step(step, is_cut: bool) -> str:
           if is_cut else
           f"sw.BossFeature(\"{name}\", \"{feat_name}\", {depth_expr})")
     return f"""        // {_cs_str(step.description)}
-        if (!sw.SelectPlane("{plane}", 1)) {{ sw.Fail("{name}", "Could not select {plane}."); return; }}
+        if (!sw.SelectPlane("{plane}", {plane_idx})) {{ sw.Fail("{name}", "Could not select {plane}."); return; }}
         sw.InsertSketch();
 {profile}        sw.CloseSketch("{name}");
         if (!{op}) {{ sw.Fail("{name}", "Feature creation returned null — check the sketch."); return; }}
@@ -137,7 +151,7 @@ def _emit_slot_rect(step) -> str:
     corners = step.positions_xy_meters or []
     if len(corners) < 4:
         return _emit_manual(step, "slot rectangle has no 4-corner record — build manually")
-    plane = _cs_str(step.sketch_plane or "Front Plane", 40)
+    plane, plane_idx = _resolve_plane(step.sketch_plane)
     lines = []
     for i in range(4):
         x1, y1 = corners[i][0], corners[i][1]
@@ -148,7 +162,7 @@ def _emit_slot_rect(step) -> str:
     depth_m = (step.dimensions_meters or {}).get("depth", 0.0)
     feat_name = _cs_str(f"{step.feature_id}_slot_rect", 60)
     return f"""        // {_cs_str(step.description)} (canonical slot rectangle; meters literals)
-        if (!sw.SelectPlane("{plane}", 1)) {{ sw.Fail("{name}", "Could not select {plane}."); return; }}
+        if (!sw.SelectPlane("{plane}", {plane_idx})) {{ sw.Fail("{name}", "Could not select {plane}."); return; }}
         sw.InsertSketch();
 {chr(10).join(lines)}
         sw.CloseSketch("{name}");
@@ -195,6 +209,38 @@ def _emit_export(step) -> str:
 """
 
 
+def _emit_hole_step(step, model) -> str:
+    """A hole/thread step. Simple THRU/BLIND holes route through the generic
+    single-cut emitter exactly as before. A COUNTERBORE/COUNTERSINK/TAPPED
+    callout is NOT built as that same plain single cut here (2026-07-28 fix):
+    the VBA path (macro_generator._macro_holes) builds a counterbore as TWO
+    concentric cuts, a countersink as a conical relief cut, and a tapped hole
+    with a cosmetic-thread note — routing all of them through the generic
+    single-circle cutter silently produced WRONG geometry (a plain hole at the
+    THRU diameter with the cbore/csk relief and thread entirely missing, no
+    error, no log). This honors the module's own stated design rule —
+    "steps that are interactive/incomplete in VBA are emitted as logged
+    WARN/MANUAL steps in C# too — never silently skipped, never pretend-built"
+    — for the one case that was falling through that rule instead of following
+    it: a hole whose callout drives geometry beyond what this emitter scripts."""
+    try:
+        callout = model.hole_callout_for_feature(step.feature_id)
+    except Exception:
+        callout = None
+    kind = getattr(getattr(callout, "type", None), "value", "") if callout else ""
+    if kind in ("counterbore", "countersink", "tapped"):
+        return _emit_manual(
+            step,
+            f"{kind} hole — the VBA path builds "
+            + ("a second concentric counterbore cut" if kind == "counterbore" else
+               "a conical countersink relief cut" if kind == "countersink" else
+               "a cosmetic-thread annotation")
+            + " that this C# emitter does not yet script (never silently built as "
+              "a plain single cut); run the matching numbered VBA macro for this "
+              "feature instead.")
+    return _emit_solid_step(step, is_cut=True)
+
+
 def _emit_step_method(step, model, part_name: str) -> tuple[str, str]:
     """(method_name, full method text) for one build step."""
     m = _method_name(step)
@@ -215,7 +261,7 @@ def _emit_step_method(step, model, part_name: str) -> tuple[str, str]:
     elif ft in ("extrude_cut",):
         body = _emit_solid_step(step, is_cut=True)
     elif ft in ("hole", "thread"):
-        body = _emit_solid_step(step, is_cut=True)
+        body = _emit_hole_step(step, model)
     elif ft == "slot_rect_cut":
         body = _emit_slot_rect(step)
     elif ft == "circular_pattern":

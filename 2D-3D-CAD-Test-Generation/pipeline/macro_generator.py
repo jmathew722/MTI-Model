@@ -2019,9 +2019,24 @@ def _macro_circular_pattern(spec: dict, feature: Feature, step: str,
     seed = spec["seed_feature_name"]
     n = spec["total_instances"]
     label = constraint_id or feature.id
+    partial_arc_note = ""
+    if float(spec.get("total_angle_deg", 360.0)) < 359.999:
+        # KNOWN UNVERIFIED AMBIGUITY (2026-07-28): the baked instance positions
+        # this pattern's SEED HOLE was placed from (_circular_positions) space
+        # qty holes over the arc with step = arc/(qty-1) — a hole at BOTH ends.
+        # This call passes the same total_angle_deg as the pattern feature's
+        # Spacing argument with EqualSpacing=True; SolidWorks' own convention
+        # for dividing that total angle across instances on a PARTIAL arc has
+        # not been live-verified against the baked math for this pipeline.
+        # VERIFY the patterned instance angles against the drawing for any
+        # partial-arc (<360deg) bolt pattern before accepting the build.
+        partial_arc_note = (
+            f"\n    ' *** PARTIAL ARC ({_v(spec['total_angle_deg'])} deg, not 360) — VERIFY instance "
+            f"angles against the drawing; SolidWorks' equal-spacing division for a "
+            f"partial arc is not independently confirmed to match the seed hole layout. ***")
     return f"""    ' ---- CIRCULAR PATTERN {feature.id}: {n} instances (n INCLUDES the seed = seed + {n - 1} copies) ----
     ' Bolt circle radius {_v(spec['bolt_circle_radius_in'])} drawing units, seed at {_v(spec['seed_angle_deg'])} deg,
-    ' equal spacing over {_v(spec['total_angle_deg'])} deg about axis "{axis}".
+    ' equal spacing over {_v(spec['total_angle_deg'])} deg about axis "{axis}".{partial_arc_note}
     If Not CreateCircularPatternSafe("{axis}", "{seed}", {n}, {_v(spec['total_angle_deg'])}, {'True' if spec['reverse_direction'] else 'False'}, {'True' if spec['geometry_pattern'] else 'False'}, {'True' if spec['vary_sketch'] else 'False'}, "{pat_name}", "{step}") Then
         WriteMacroResult "{pat_name}", "FAIL", "FeatureCircularPattern returned Nothing - check marks/axis"
         LogResult "FAIL", "{step}", "FeatureCircularPattern returned Nothing - check marks/axis"

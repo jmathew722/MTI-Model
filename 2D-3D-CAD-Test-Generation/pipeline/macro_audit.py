@@ -108,6 +108,7 @@ _KNOWN_ENUM_MEMBERS = frozenset({
     "swFeatureFilletOptions_e.swFeatureFilletPropagate",
     "swMessageBoxBtn_e.swMbOk",
     "swMessageBoxIcon_e.swMbStop",
+    "swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance",
     "swSaveAsOptions_e.swSaveAsOptions_Silent",
     "swStartConditions_e.swStartSketchPlane",
     "swUnitSystem_e.swUnitSystem_IPS",

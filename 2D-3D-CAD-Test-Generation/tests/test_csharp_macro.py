@@ -9,6 +9,7 @@ import pytest
 
 from pipeline.csharp_macro import (
     CSharpEmitError,
+    _resolve_plane,
     _self_echo_check,
     generate_csharp_package,
 )
@@ -105,3 +106,76 @@ def test_self_echo_rejects_dropped_position(built):
         _self_echo_check(pkg, broken)
     # And the intact program passes with all positions checked.
     assert _self_echo_check(pkg, program) >= 4
+
+
+class TestPlaneResolution:
+    """2026-07-28 fix: _emit_solid_step/_emit_slot_rect used to pass the RAW
+    unmapped sketch_plane label (e.g. "top") straight to SelectPlane with a
+    HARDCODED index of 1 — SelectByID2 never matches a bare lowercase label
+    (it needs the real plane name "Top Plane"), so every non-front-plane C#
+    build silently fell back to the 1st reference plane in the tree (Front
+    Plane) regardless of which plane was intended."""
+
+    def test_top_resolves_to_top_plane_index_2(self):
+        assert _resolve_plane("top") == ("Top Plane", 2)
+        assert _resolve_plane("Top") == ("Top Plane", 2)   # case-insensitive
+
+    def test_right_and_side_aliases_resolve_to_right_plane_index_3(self):
+        assert _resolve_plane("right") == ("Right Plane", 3)
+        assert _resolve_plane("side") == ("Right Plane", 3)
+        assert _resolve_plane("left") == ("Right Plane", 3)
+
+    def test_front_resolves_to_front_plane_index_1(self):
+        assert _resolve_plane("front") == ("Front Plane", 1)
+        assert _resolve_plane("") == ("Front Plane", 1)   # default
+
+    def test_unrecognized_label_falls_back_to_front_not_a_wrong_plane(self):
+        # e.g. "REF_DATUM_A" (the slot_rect_cut sentinel) — REF_DATUM_A IS the
+        # base datum coincident with Front Plane, so this fallback is correct.
+        assert _resolve_plane("REF_DATUM_A") == ("Front Plane", 1)
+
+    def test_generated_program_selects_the_correct_plane_for_a_top_feature(self, built):
+        """End-to-end: the golden fixture's F001 is sketch_plane="Top" — the
+        emitted Program.cs must select "Top Plane" at index 2, never index 1
+        (which — before the fix — silently built it on Front Plane instead)."""
+        model, pkg = built
+        program = (pkg.root / "macros_csharp" / "Program.cs").read_text(encoding="utf-8")
+        assert 'SelectPlane("Top Plane", 2)' in program
+        assert 'SelectPlane("top", 1)' not in program   # the old broken call
+
+
+class TestHoleTypeParity:
+    """2026-07-28 fix: a counterbore/countersink/tapped hole used to route
+    through the generic single-cut emitter (_emit_solid_step), silently
+    building a PLAIN through/blind hole with the cbore/csk relief or thread
+    entirely missing — no error, no log, wrong geometry. Now routes to an
+    honest MANUAL step (matching the module's own stated design rule)."""
+
+    def _cbore_drawing(self):
+        d = _golden_drawing()
+        d["hole_callouts"] = [
+            {"id": "H001", "type": "counterbore", "diameter": 0.25, "qty": 1,
+             "cbore_diameter": 0.5, "cbore_depth": 0.1, "feature_ref": "F002"},
+        ]
+        return d
+
+    def _build(self, data, tmp_path):
+        model, report = run_verification(data)
+        assert report.ok, str(report)
+        return generate_macro_package(model, data, format_verification_report(model, report), tmp_path)
+
+    def test_counterbore_routes_to_manual_not_a_plain_cut(self, tmp_path):
+        pkg = self._build(self._cbore_drawing(), tmp_path)
+        program = (pkg.root / "macros_csharp" / "Program.cs").read_text(encoding="utf-8")
+        # The F002 step must be a logged MANUAL step naming the counterbore —
+        # never a plain sw.CutFeature/sw.CreateCircle for the wrong diameter.
+        assert 'counterbore' in program.lower()
+        assert 'sw.Log("WARN"' in program
+
+    def test_simple_hole_still_builds_normally(self, built):
+        # A plain THRU hole (the golden fixture's F002) must NOT be affected —
+        # still a real scripted cut, not demoted to manual.
+        model, pkg = built
+        program = (pkg.root / "macros_csharp" / "Program.cs").read_text(encoding="utf-8")
+        assert "sw.CreateCircle(2.5, 1, 0.25)" in program
+        assert "sw.CutFeature(" in program
