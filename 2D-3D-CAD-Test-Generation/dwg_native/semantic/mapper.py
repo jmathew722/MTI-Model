@@ -52,15 +52,28 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
     # plausible drawing magnitude, not material/notes ("1020 STEEL", "FINISH...").
     numeric_tokens = [t for t in texts if _is_dimension_like(t["text"])]
     attachments = attach_by_proximity(numeric_tokens, geo)
-    conflicts = find_conflicts(circles, multipliers, attachments)
-    # Profile confidence: both edges confirmed by a stated overall dimension?
+    conflicts = find_conflicts(circles, multipliers, attachments, unit_factor=factor)
+    # Profile confidence: both edges confirmed by a stated overall dimension? A
+    # rectangle formed by dimension/extension/border lines (not the real outline)
+    # can otherwise win as the base profile with no signal that it's wrong.
+    # matched_sides==0 (NEITHER edge confirmed by the drawing's own numbers) is
+    # hard-flagged CRITICAL and BLOCKING — building an unconfirmed-by-any-stated-
+    # dimension profile is exactly the silent-wrong-geometry failure mode this
+    # pipeline exists to avoid; 1/2 is a softer HIGH advisory (previously both
+    # were the same easy-to-miss MEDIUM).
     if profile is not None and matched_sides < 2:
+        blocking = matched_sides == 0
         conflicts.append({
-            "type": "profile_unverified", "blocking": False, "severity": "MEDIUM",
+            "type": "profile_unverified",
+            "blocking": blocking,
+            "severity": "CRITICAL" if blocking else "HIGH",
             "detail": (f"Base profile {round(profile.width / factor, 3)}×"
-                       f"{round(profile.height / factor, 3)} could not be fully "
-                       f"confirmed against a stated overall dimension "
-                       f"({matched_sides}/2 edges matched) — verify the outline."),
+                       f"{round(profile.height / factor, 3)} could not be "
+                       f"{'at all ' if blocking else 'fully '}confirmed against a "
+                       f"stated overall dimension ({matched_sides}/2 edges matched) — "
+                       + ("this profile is likely wrong (a dimension/extension-line "
+                          "rectangle, not the part outline); verify the outline before "
+                          "building." if blocking else "verify the outline.")),
         })
     # Hole callout tokens (tapped / countersink / counterbore) for type + flags.
     callout_tokens = [t for t in texts

@@ -276,26 +276,66 @@ def _seed_dia(build_plan: dict, feature_id: str) -> Optional[float]:
 # --------------------------------------------------------------------------- #
 # Matching + classification
 # --------------------------------------------------------------------------- #
+def _assign_holes(expected: list[dict], measured: list[dict]) -> dict[int, tuple[int, float]]:
+    """Global optimal one-to-one assignment (min total distance) of expected holes
+    to measured holes, via the Hungarian algorithm. Greedy nearest-first matching
+    (the prior approach) processes expected holes in list order and can steal a
+    measured hole a LATER expected hole actually needed — producing spurious
+    MISPLACED/MISSING/EXTRA classifications that then feed the geometric
+    correction loop with a mismatch that was never really wrong. Returns
+    {expected_index: (measured_index, distance)} for pairs within
+    MISPLACED_SEARCH_IN; falls back to greedy if scipy is unavailable."""
+    if not expected or not measured:
+        return {}
+    try:
+        import numpy as np
+        from scipy.optimize import linear_sum_assignment
+    except Exception:
+        # Fallback: greedy nearest-first (previous behavior), never a hard failure.
+        remaining = list(range(len(measured)))
+        out: dict[int, tuple[int, float]] = {}
+        for ei, e in enumerate(expected):
+            best_i, best_d = None, float("inf")
+            for i in remaining:
+                d = math.hypot(e["x"] - measured[i]["x"], e["y"] - measured[i]["y"])
+                if d < best_d:
+                    best_i, best_d = i, d
+            if best_i is not None and best_d <= MISPLACED_SEARCH_IN:
+                out[ei] = (best_i, best_d)
+                remaining.remove(best_i)
+        return out
+
+    n_e, n_m = len(expected), len(measured)
+    cost = np.zeros((n_e, n_m))
+    for i, e in enumerate(expected):
+        for j, m in enumerate(measured):
+            cost[i, j] = math.hypot(e["x"] - m["x"], e["y"] - m["y"])
+    row_idx, col_idx = linear_sum_assignment(cost)
+    out = {}
+    for i, j in zip(row_idx, col_idx):
+        d = float(cost[i, j])
+        if d <= MISPLACED_SEARCH_IN:
+            out[int(i)] = (int(j), d)
+    return out
+
+
 def _match_holes(expected: list[dict], measured: list[dict],
                  pos_tol: float, dia_tol: float) -> tuple[list[dict], list[dict]]:
-    """Greedy nearest-position matching. Returns (feature_results, extras)."""
-    remaining = list(range(len(measured)))
+    """Global optimal matching (see _assign_holes). Returns (feature_results, extras)."""
+    assignment = _assign_holes(expected, measured)
+    used_measured = {j for j, _ in assignment.values()}
+    remaining = [i for i in range(len(measured)) if i not in used_measured]
     results: list[dict] = []
 
-    for e in expected:
-        best_i, best_d = None, float("inf")
-        for i in remaining:
-            m = measured[i]
-            d = math.hypot(e["x"] - m["x"], e["y"] - m["y"])
-            if d < best_d:
-                best_i, best_d = i, d
+    for ei, e in enumerate(expected):
+        best_i, best_d = assignment.get(ei, (None, float("inf")))
         checks: list[dict] = []
         classification = MISSING
         measured_hole = None
         if best_i is not None and best_d <= MISPLACED_SEARCH_IN:
             m = measured[best_i]
             measured_hole = m
-            remaining.remove(best_i)
+            # already excluded from `remaining` via the optimal assignment above
             pos_ok = best_d <= pos_tol
             dia_ok = abs(m["diameter"] - e["diameter"]) <= dia_tol
             through_ok = (m["through"] == e["through"])

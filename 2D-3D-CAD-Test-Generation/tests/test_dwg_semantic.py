@@ -142,7 +142,12 @@ def _synthetic_raw():
                     end_2d_m=g.get("end_2d_m")) for g in _rect(0, 0, 4 * IN, 2 * IN)]
     geo.append(Geometry(id="G5", type="circle", center_2d_m=[1 * IN, 1 * IN], radius_m=0.25 * IN))
     geo.append(Geometry(id="G6", type="circle", center_2d_m=[3 * IN, 1 * IN], radius_m=0.25 * IN))
-    txt = [TextToken(id="T1", text=".25", position_2d_m=[2 * IN, -0.01])]
+    txt = [TextToken(id="T1", text=".25", position_2d_m=[2 * IN, -0.01]),
+          # Stated overall dimensions confirming the 4x2 rectangle profile (a
+          # realistic drawing states its outline; the mapper now hard-flags a
+          # profile with NO stated-dimension confirmation as likely-wrong).
+          TextToken(id="T2", text="4.000", position_2d_m=[2 * IN, -0.2]),
+          TextToken(id="T3", text="2.000", position_2d_m=[-0.2, 1 * IN])]
     return RawExtraction(source_file="SYN.dwg", units_detected="inch",
                          sheet={"width_m": 4 * IN, "height_m": 2 * IN, "min_x_m": 0, "min_y_m": 0},
                          views=[View(name="Model", geometry=geo, text_tokens=txt)])
@@ -185,6 +190,52 @@ def test_a050211e_multiplier_conflict_blocks():
     assert blocking, "6-vs-5 must produce a blocking conflict"
     assert blocking[0]["type"] == "multiplier_vs_count"
     assert blocking[0]["callout_count"] == 6 and blocking[0]["counted_instances"] == 5
+
+
+def test_multi_size_holes_reconciled_per_diameter_not_falsely_blocked():
+    """'4X Ø.25' + '2X Ø.50' = 6 real holes of two different sizes. The old logic
+    took max(4, 2)=4 and compared it to the total 6 -> guaranteed false CRITICAL
+    on every multi-size drawing. Grouping by the diameter each callout names must
+    NOT block when each group's count is actually correct."""
+    from dwg_native.semantic.rules import Circle
+    circles = ([Circle(id=f"A{i}", center=(i * IN, IN), radius=0.125 * IN, role="hole")
+               for i in range(4)]      # 4x .25 dia
+              + [Circle(id=f"B{i}", center=(i * IN, 3 * IN), radius=0.25 * IN, role="hole")
+                for i in range(2)])    # 2x .50 dia
+    multipliers = parse_multipliers([{"text": "4X Ø.25", "id": "T1"},
+                                     {"text": "2X Ø.50", "id": "T2"}])
+    conflicts = find_conflicts(circles, multipliers, [])
+    assert not any(c.get("blocking") for c in conflicts), conflicts
+
+
+def test_multi_size_holes_still_blocks_when_a_group_count_is_wrong():
+    from dwg_native.semantic.rules import Circle
+    circles = ([Circle(id=f"A{i}", center=(i * IN, IN), radius=0.125 * IN, role="hole")
+               for i in range(3)]      # only 3, but callout says 4x .25
+              + [Circle(id=f"B{i}", center=(i * IN, 3 * IN), radius=0.25 * IN, role="hole")
+                for i in range(2)])
+    multipliers = parse_multipliers([{"text": "4X Ø.25", "id": "T1"},
+                                     {"text": "2X Ø.50", "id": "T2"}])
+    conflicts = find_conflicts(circles, multipliers, [])
+    blocking = [c for c in conflicts if c.get("blocking")]
+    assert blocking and blocking[0]["diameter"] == pytest.approx(0.25)
+
+
+# ---- profile confirmation hard-flag ---------------------------------------- #
+def test_profile_with_zero_stated_confirmation_blocks():
+    """A rectangle with NEITHER edge confirmed by a stated dimension (e.g. formed
+    by dimension/extension lines, not the real outline) must hard-block, not just
+    a soft advisory a human could miss."""
+    L, W = 4 * IN, 2 * IN
+    geo = [Geometry(id=g["id"], type=g["type"], start_2d_m=g.get("start_2d_m"),
+                    end_2d_m=g.get("end_2d_m")) for g in _rect(0, 0, L, W)]
+    raw = RawExtraction(source_file="X.dwg", units_detected="inch",
+                        sheet={"width_m": L, "height_m": W, "min_x_m": 0, "min_y_m": 0},
+                        views=[View(name="Model", geometry=geo, text_tokens=[])])
+    bp = map_to_build_plan(raw)
+    assert bp["blocking"]
+    unverified = [c for c in bp["conflicts"] if c["type"] == "profile_unverified"]
+    assert unverified and unverified[0]["blocking"] and unverified[0]["severity"] == "CRITICAL"
 
 
 # ---- OCR correction ------------------------------------------------------- #

@@ -21,20 +21,49 @@ class ProvenanceError(RuntimeError):
 
 
 def find_conflicts(circles: List[Any], multipliers: List[Any],
-                   attachments: List[dict]) -> List[dict]:
+                   attachments: List[dict], unit_factor: float = 0.0254) -> List[dict]:
     """Return a list of conflict dicts (blocking=True/False). Empty = clean.
 
-    ``circles`` are rules.Circle; ``multipliers`` are numbers.ParsedNumber with a
-    count; ``attachments`` are rules.attach_by_proximity output.
+    ``circles`` are rules.Circle (radius in METERS); ``multipliers`` are
+    numbers.ParsedNumber with a count (value in DRAWING UNITS, e.g. inches, as
+    read from the sheet text) — ``unit_factor`` converts between them (meters per
+    drawing unit; default 0.0254 = inch). ``attachments`` are
+    rules.attach_by_proximity output.
     """
     conflicts: List[dict] = []
 
     holes = [c for c in circles if getattr(c, "role", "") == "hole"]
     counted = len(holes)
-    # Total callout count (max explicit multiplier that looks like a hole count).
-    callouts = [m.count for m in multipliers if getattr(m, "count", None)]
-    if callouts:
-        called = max(callouts)
+    callouts = [m for m in multipliers if getattr(m, "count", None)]
+    # A token like "4X Ø.25" carries BOTH a count and its own diameter (kind==
+    # "diameter"); a bare "(6) HLS" carries only a count (kind=="count", no
+    # diameter). When every callout names its own diameter, reconcile PER
+    # DIAMETER GROUP — summing max() across sizes falsely blocked a drawing with
+    # "4X Ø.25" + "2X Ø.50" (6 real holes): the old code took max(4, 2) = 4 and
+    # compared it to the total 6, a guaranteed false CRITICAL on any multi-size
+    # part. When any callout is a bare count (no diameter to group by), fall back
+    # to the original total-vs-max comparison (the single-group canonical case,
+    # e.g. A050211E's "(6) HLS").
+    sized = [m for m in callouts if getattr(m, "kind", "") == "diameter"]
+    if sized and len(sized) == len(callouts):
+        for m in sized:
+            group = [h for h in holes
+                     if abs(float(getattr(h, "radius", 0)) * 2 / unit_factor - m.value) <= 0.01]
+            if len(group) != m.count:
+                conflicts.append({
+                    "type": "multiplier_vs_count",
+                    "blocking": True,
+                    "severity": "CRITICAL",
+                    "detail": (f"Callout specifies {m.count} hole(s) of diameter {m.value:g} "
+                               f"but {len(group)} matching-diameter hole(s) exist in the "
+                               "geometry."),
+                    "callout_count": m.count,
+                    "counted_instances": len(group),
+                    "diameter": m.value,
+                    "resolution": "human_decision_required",
+                })
+    elif callouts:
+        called = max(m.count for m in callouts)
         if called != counted:
             conflicts.append({
                 "type": "multiplier_vs_count",
