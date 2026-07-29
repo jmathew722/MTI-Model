@@ -75,8 +75,20 @@ def emit_vba(build_plan: Dict[str, Any], sldprt_path: str = "part.sldprt") -> st
             depth_m = m(d["depth"]) if (is_blind and d.get("depth")) else None
             end_cond = 0 if depth_m else 1
             depth_lit = f"{depth_m}" if depth_m else "0.01"
+            # Sketch on "Front Plane" at z=0 — the SAME plane the COM builder
+            # uses (dwg_native/build/builder.py), not a FACE selected by an
+            # (x,y,z) coordinate hit. 2026-07-28 fix: the two build paths used
+            # to sketch holes on DIFFERENT references (this file selected a
+            # face at z=thickness; the COM path sketches on Front Plane at
+            # z=0), so a user running this VBA macro could get different
+            # geometry than the automated COM build — plus SelectByID2 by
+            # coordinate hit is exactly the fragile selection pattern
+            # documented as failure-prone (a face pick can silently grab the
+            # wrong face, or fail entirely, depending on view/occlusion). The
+            # COM path is live-verified (STL volume matched analytically
+            # expected geometry); VBA now matches it exactly.
             lines.append(f"""    ' --- {fid}: hole diameter {dia} at ({pos[0]}, {pos[1]}) (DWG-exact circle){' - BLIND ' + str(d.get('depth')) if depth_m else ''} ---
-    swModel.Extension.SelectByID2 "", "FACE", {cx}, {cy}, {m(d.get('thickness', 0.001)) or 0.001}, False, 0, Nothing, 0
+    swModel.Extension.SelectByID2 "Front Plane", "PLANE", 0, 0, 0, False, 0, Nothing, 0
     swSM.InsertSketch True
     swSM.CreateCircleByRadius {cx}, {cy}, 0#, {r}
     swSM.InsertSketch True   ' consume ACTIVE sketch (E006)

@@ -27,6 +27,22 @@ def test_emitted_vba_passes_static_audit():
     assert findings == [], f"emitted VBA tripped the auditor: {findings}"
 
 
+def test_vba_and_com_paths_sketch_holes_on_the_same_plane():
+    """2026-07-28 fix: the VBA emitter used to sketch a hole on a FACE selected
+    by an (x,y,z) coordinate hit at z=thickness, while the COM builder
+    (dwg_native/build/builder.py, live-verified) sketches on "Front Plane" at
+    z=0 for every feature — a genuine cross-path divergence where a user
+    running the VBA macro could get different geometry than the automated
+    build. Both paths must now select "Front Plane" for every feature,
+    matching the COM builder's live-proven approach (not the fragile
+    coordinate-hit face selection)."""
+    vba = emit_vba(_plan(), "P.SLDPRT")
+    # Both the base extrude AND the hole cut select the plane by name, never a
+    # coordinate-hit FACE selection.
+    assert vba.count('SelectByID2 "Front Plane", "PLANE"') == 2
+    assert '"FACE"' not in vba
+
+
 def test_e004_no_invented_model_bounding_box_api():
     # E004: never IModelDoc2.GetModelBoundingBox; use IBody2.GetBodyBox.
     vba = emit_vba(_plan(), "P.SLDPRT")
