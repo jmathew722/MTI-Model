@@ -137,28 +137,43 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
         corr = _diameter_correction(h, texts, factor, dia)
         if corr:
             corrections.append(corr)
-        # Manufacturing type from the nearest hole callout (tapped/csink/cbore).
+        # Manufacturing type + depth from the nearest hole callout.
         htype, callout, hflags = "simple", "", []
+        depth_val = None
+        near = None
         if callout_tokens:
             near = min(callout_tokens, key=lambda t: _math.hypot(
                 t["position_2d_m"][0] - h.center[0], t["position_2d_m"][1] - h.center[1]))
             cl = classify_hole_callout(near["text"])
             htype, callout = cl["subtype"], cl["callout"]
-            if htype in ("tapped", "countersink", "counterbore"):
-                hflags.append({"tier": "MEDIUM", "note":
-                    f"{htype} ({callout!r}) recorded from callout but NOT geometrically "
-                    f"modeled — a through-hole at the exact ⌀{dia} is built; verify the "
-                    f"{'thread' if htype == 'tapped' else htype} treatment."})
+        # A depth callout ("DRILL .16 DP", ".25 DEEP") near THIS hole makes it
+        # blind at that depth — previously every hole was hardcoded through_all
+        # regardless of a stated blind depth.
+        dep_pn = parse_number(near["text"]) if near is not None else None
+        if dep_pn is not None and dep_pn.is_depth and dep_pn.value:
+            depth_val = round(dep_pn.value, 4)
+        depth_type = "blind" if depth_val else "through_all"
+        if htype in ("tapped", "countersink"):
+            hflags.append({"tier": "MEDIUM", "note":
+                f"{htype} ({callout!r}) recorded from callout but NOT geometrically "
+                f"modeled — a through-hole at the exact ⌀{dia} is built; verify the "
+                f"{'thread' if htype == 'tapped' else htype} treatment."})
+        dims = {"diameter": dia}
+        prov_map = {"diameter": f"circle:{h.id}", "position": f"circle:{h.id}"}
+        if depth_val:
+            dims["depth"] = depth_val
+            prov_map["depth"] = f"text:{near['id']}"
         steps.append({
             "seq": 3 + i, "feature_id": fid, "type": "hole",
-            "description": f"Hole ⌀{dia} ({htype}) at ({cx}, {cy}) — exact from circle {h.id}",
-            "dimensions_drawing_units": {"diameter": dia},
+            "description": (f"Hole ⌀{dia} ({htype}) at ({cx}, {cy}) — exact from circle "
+                            f"{h.id}" + (f", {depth_val} deep" if depth_val else "")),
+            "dimensions_drawing_units": dims,
             "positions_xy": [[cx, cy]],
-            "depth_type": "through_all",
+            "depth_type": depth_type,
             "hole_type": htype, "callout": callout,
             "hole_instances": h.instances,
             "provenance": [f"circle:{h.id}"],
-            "provenance_map": {"diameter": f"circle:{h.id}", "position": f"circle:{h.id}"},
+            "provenance_map": prov_map,
             "flags": hflags,
         })
         dispositions.append({"feature_id": fid, "type": "hole",
@@ -166,6 +181,42 @@ def map_to_build_plan(raw: RawExtraction) -> Dict[str, Any]:
                              "hole_type": htype,
                              "values_used": {"diameter": dia, "x": cx, "y": cy},
                              "position_source": "vector_geometry"})
+
+        # A concentric counterbore mouth is a SEPARATE stepped cut — never
+        # folded into the drilled diameter (previously the merge kept the OUTER
+        # radius, so a .19 THRU + .38 CBORE built as a plain .38 hole all the
+        # way through the part).
+        if h.cbore_radius > 0:
+            cbore_dia = _to_draw(2 * h.cbore_radius, factor)
+            cbore_depth = round(depth_val, 4) if (htype == "counterbore" and depth_val) else None
+            cb_fid = f"{fid}_cb"
+            cb_dims = {"diameter": cbore_dia}
+            cb_prov_map = {"diameter": f"circle:{h.id}", "position": f"circle:{h.id}"}
+            cb_flags = []
+            if cbore_depth:
+                cb_dims["depth"] = cbore_depth
+                cb_prov_map["depth"] = f"text:{near['id']}"
+            else:
+                cb_flags.append({"tier": "MEDIUM", "note":
+                    f"Counterbore mouth ⌀{cbore_dia} detected (concentric with {fid}) but no "
+                    "depth callout found nearby — verify counterbore depth before building."})
+            steps.append({
+                "seq": 3 + i, "feature_id": cb_fid, "type": "hole",
+                "description": f"Counterbore ⌀{cbore_dia} at ({cx}, {cy}), concentric with {fid}",
+                "dimensions_drawing_units": cb_dims,
+                "positions_xy": [[cx, cy]],
+                "depth_type": "blind" if cbore_depth else "blind_unknown_depth",
+                "hole_type": "counterbore_relief", "callout": callout,
+                "hole_instances": h.instances,
+                "provenance": [f"circle:{h.id}"],
+                "provenance_map": cb_prov_map,
+                "flags": cb_flags,
+            })
+            dispositions.append({"feature_id": cb_fid, "type": "hole",
+                                 "state": "BUILT_WITH_FLAG" if cb_flags else "BUILT",
+                                 "hole_type": "counterbore_relief",
+                                 "values_used": {"diameter": cbore_dia, "x": cx, "y": cy},
+                                 "position_source": "vector_geometry"})
 
     # -- export / verify tail ---------------------------------------------- #
     steps.append({"seq": 999, "feature_id": "-", "type": "verify",

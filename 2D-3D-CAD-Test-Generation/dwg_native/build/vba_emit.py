@@ -68,12 +68,19 @@ def emit_vba(build_plan: Dict[str, Any], sldprt_path: str = "part.sldprt") -> st
             dia = d.get("diameter", 0)
             r = m(dia / 2.0 if dia else 0)
             cx, cy = m(pos[0]), m(pos[1])
-            lines.append(f"""    ' --- {fid}: hole diameter {dia} at ({pos[0]}, {pos[1]}) (DWG-exact circle) ---
+            # A blind depth callout cuts to that depth, not through-all (E006-
+            # adjacent fix: parity with the COM builder — a counterbore relief /
+            # ".16 DP" drill must never be cut clear through the part).
+            is_blind = step.get("depth_type") in ("blind", "blind_unknown_depth")
+            depth_m = m(d["depth"]) if (is_blind and d.get("depth")) else None
+            end_cond = 0 if depth_m else 1
+            depth_lit = f"{depth_m}" if depth_m else "0.01"
+            lines.append(f"""    ' --- {fid}: hole diameter {dia} at ({pos[0]}, {pos[1]}) (DWG-exact circle){' - BLIND ' + str(d.get('depth')) if depth_m else ''} ---
     swModel.Extension.SelectByID2 "", "FACE", {cx}, {cy}, {m(d.get('thickness', 0.001)) or 0.001}, False, 0, Nothing, 0
     swSM.InsertSketch True
     swSM.CreateCircleByRadius {cx}, {cy}, 0#, {r}
     swSM.InsertSketch True   ' consume ACTIVE sketch (E006)
-    Set swFeat = swFM.FeatureCut4(True, False, False, 1, 0, 0.01, 0.01, _
+    Set swFeat = swFM.FeatureCut4(True, False, False, {end_cond}, 0, {depth_lit}, 0.01, _
         False, False, False, False, 0, 0, False, False, False, False, False, _
         True, True, True, True, False, 0, 0, False)
     If swFeat Is Nothing Then Err.Raise vbObjectError, , "FeatureCut4 None for {fid}"

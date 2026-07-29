@@ -97,7 +97,15 @@ def build_part(build_plan: Dict[str, Any], output_dir: str | Path,
                 fd = _fully_defined(doc, _null_dispatch)
                 fully_defined.append({"feature_id": fid, "sketch": "hole", "status": fd})
                 sm.InsertSketch(True)  # consume ACTIVE sketch (E006)
-                feat = _cut_thru(fm, to_radians)
+                # A blind depth callout (e.g. counterbore relief, ".16 DP" drill)
+                # cuts to that depth, not through-all — previously every hole was
+                # hardcoded through_all regardless of a stated blind depth.
+                is_blind = step.get("depth_type") in ("blind", "blind_unknown_depth")
+                depth_m = m(d["depth"]) if (is_blind and d.get("depth")) else None
+                if depth_m:
+                    feat = _cut_blind(fm, to_radians, depth_m)
+                else:
+                    feat = _cut_thru(fm, to_radians)
                 if feat is None:
                     raise BuildError(f"FeatureCut4 None for {fid} (both directions)")
                 try:
@@ -172,6 +180,23 @@ def _cut_thru(fm, to_radians):
         try:
             feat = fm.FeatureCut4(
                 True, False, flip, 1, 0, 0.0, 0.01,
+                False, False, False, False, to_radians(0), to_radians(0),
+                False, False, False, False, False,
+                True, True, True, True, False, 0, 0, False, False)
+            if feat is not None:
+                return feat
+        except Exception:
+            continue
+    return None
+
+
+def _cut_blind(fm, to_radians, depth_m):
+    """FeatureCut4 to a BLIND depth (end=0) with a direction-flip retry — a
+    counterbore relief or a drilled-to-depth hole must not cut through-all."""
+    for flip in (True, False):
+        try:
+            feat = fm.FeatureCut4(
+                True, False, flip, 0, 0, float(depth_m), 0.01,
                 False, False, False, False, to_radians(0), to_radians(0),
                 False, False, False, False, False,
                 True, True, True, True, False, 0, 0, False, False)

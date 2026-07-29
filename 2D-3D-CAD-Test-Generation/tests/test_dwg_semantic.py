@@ -165,6 +165,37 @@ def test_map_to_build_plan_exact_holes_and_provenance():
     assert_provenance(bp)   # must not raise
 
 
+# ---- counterbore diameter + blind-depth (2026-07-28 fix) ------------------- #
+def test_counterbore_keeps_through_diameter_not_merged_outer():
+    """A .19 through-hole with a concentric .38 counterbore mouth must build as a
+    .19 hole (the drilled diameter) plus a SEPARATE .38 counterbore step —
+    previously the concentric merge kept the OUTER radius, so a .38 mouth
+    diameter was drilled all the way through the part."""
+    L, W = 4 * IN, 2 * IN
+    geo = [Geometry(id=g["id"], type=g["type"], start_2d_m=g.get("start_2d_m"),
+                    end_2d_m=g.get("end_2d_m")) for g in _rect(0, 0, L, W)]
+    # concentric pair: through-drill .19 dia + counterbore mouth .38 dia
+    geo.append(Geometry(id="G5", type="circle", center_2d_m=[1 * IN, 1 * IN], radius_m=0.095 * IN))
+    geo.append(Geometry(id="G6", type="circle", center_2d_m=[1 * IN, 1 * IN], radius_m=0.19 * IN))
+    txt = [TextToken(id="T1", text="4.000", position_2d_m=[2 * IN, -0.2]),
+          TextToken(id="T2", text="2.000", position_2d_m=[-0.2, 1 * IN]),
+          TextToken(id="T3", text="DRILL & C'BORE .20 DEEP", position_2d_m=[1.05 * IN, 1 * IN])]
+    raw = RawExtraction(source_file="CB.dwg", units_detected="inch",
+                        sheet={"width_m": L, "height_m": W, "min_x_m": 0, "min_y_m": 0},
+                        views=[View(name="Model", geometry=geo, text_tokens=txt)])
+    bp = map_to_build_plan(raw)
+    holes = [s for s in bp["steps"] if s["type"] == "hole"]
+    base = next(h for h in holes if not h["feature_id"].endswith("_cb"))
+    cbore = next(h for h in holes if h["feature_id"].endswith("_cb"))
+    assert base["dimensions_drawing_units"]["diameter"] == pytest.approx(0.19, abs=1e-3)
+    assert cbore["dimensions_drawing_units"]["diameter"] == pytest.approx(0.38, abs=1e-3)
+    assert base["hole_type"] == "counterbore"
+    # blind depth from the callout carries onto the base hole, not through-all.
+    assert base["depth_type"] == "blind"
+    assert base["dimensions_drawing_units"]["depth"] == pytest.approx(0.20, abs=1e-3)
+    assert_provenance(bp)
+
+
 def test_provenance_invariant_raises_on_unsourced_value():
     bp = map_to_build_plan(_synthetic_raw())
     # corrupt: strip provenance from a real feature

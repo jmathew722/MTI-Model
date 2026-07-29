@@ -48,10 +48,13 @@ class Loop:
 class Circle:
     id: str
     center: Tuple[float, float]
-    radius: float
+    radius: float                    # the THROUGH-hole radius (build diameter)
     role: str = "unknown"       # hole | construction | border | center_mark
     instances: int = 1          # merged concentric duplicates
     layer: str = ""
+    cbore_radius: float = 0.0   # >0 if a larger concentric circle (counterbore
+                                # mouth) merged into this hole — a SEPARATE
+                                # stepped cut, never the drilled diameter
 
 
 def _snap(v: float) -> float:
@@ -280,7 +283,13 @@ def classify_circles(circles: List[dict], profile: Optional[Loop],
         out.append(Circle(id=c["id"], center=(ctr[0], ctr[1]), radius=float(r),
                           layer=c.get("layer", "")))
 
-    # Merge concentric (same center within snap).
+    # Merge concentric (same center within snap). The SMALLER circle is the
+    # through-drilled hole (the diameter that is actually drilled/cut all the
+    # way); a larger concentric circle is its counterbore MOUTH — recorded
+    # separately (cbore_radius), never folded into the build diameter. Merging
+    # into the outer radius used to build the cbore's mouth diameter as a plain
+    # through-hole (drilling a .50 cbore relief clear through a part that only
+    # needed a .19 through-hole).
     merged: List[Circle] = []
     for c in sorted(out, key=lambda z: z.radius):
         hit = None
@@ -290,7 +299,8 @@ def classify_circles(circles: List[dict], profile: Optional[Loop],
                 break
         if hit:
             hit.instances += 1
-            hit.radius = max(hit.radius, c.radius)  # keep the outer (cbore) radius
+            if c.radius > hit.radius:
+                hit.cbore_radius = c.radius   # larger concentric circle = cbore mouth
         else:
             merged.append(c)
 
