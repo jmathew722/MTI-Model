@@ -71,6 +71,24 @@ class TestDerivation:
         syms = [r for r in refs if r.id.startswith("REF_SYM_")]
         assert syms and syms[0].type == "plane"
 
+    def test_symmetry_offset_uses_the_correct_axis_dimension(self):
+        """2026-07-28 fix: an X-axis (Right Plane) symmetry offset must use
+        LENGTH/2; a Y-axis (Top Plane) symmetry offset must use WIDTH/2 — the
+        old code always preferred length whenever it existed, regardless of
+        which axis the plane was actually on. length=4.0in, width=2.0in here
+        (genuinely different), so the bug would be visible: a Y-axis plane
+        would wrongly get 4.0/2=2.0 (in meters) instead of the correct
+        2.0/2=1.0."""
+        d = _drawing(symmetry=False)
+        d["relationships"] = {"symmetry": [{"plane": "Right", "feature_ids": ["F002"]},
+                                           {"plane": "Top", "feature_ids": ["F002"]}]}
+        refs = derive_reference_geometry(_model(d))
+        sym_x = next(r for r in refs if r.id == "REF_SYM_X")
+        sym_y = next(r for r in refs if r.id == "REF_SYM_Y")
+        # length=4.0in -> half=2.0in -> 0.0508m; width=2.0in -> half=1.0in -> 0.0254m
+        assert sym_x.offset_m == pytest.approx(0.0508, abs=1e-6)
+        assert sym_y.offset_m == pytest.approx(0.0254, abs=1e-6)
+
     def test_explicit_datum_b(self):
         refs = derive_reference_geometry(_model(_drawing(datums=True)))
         assert "REF_DATUM_B" in {r.id for r in refs}

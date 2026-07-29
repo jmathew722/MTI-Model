@@ -2073,18 +2073,30 @@ def save_model(sw_doc, name: str, output_dir: Optional[Path] = None) -> str:
     # working directory (not Python's), silently scattering files elsewhere.
     path = (output_dir / f"{safe}.sldprt").resolve()
 
-    # SaveAs3(Name, Version, Options) → returns error/warning ints via SaveAs.
-    errors = 0
-    warnings = 0
+    # SaveAs3(Name, Version, Options) returns an INTEGER swFileSaveError_e
+    # bitmask, NOT a bool — 0 = swFileSaveWithoutError (success), any nonzero
+    # value is one or more error flags set (live-verified 2026-07-28: a
+    # successful save returned int 0; forcing a failure — an invalid drive path
+    # — returned int 1 with no file written). The previous check
+    # `result in (False, None)` relied on Python's `0 == False` to catch the
+    # success case by ACCIDENT, but a genuine nonzero error code (1, 2, 4, ...)
+    # is never `in (False, None)` — so an actual SaveAs3 FAILURE silently
+    # passed this check entirely and save_model returned claiming success with
+    # nothing written. Any nonzero code with no file on disk is now a hard
+    # failure; a nonzero code where SolidWorks still wrote the file is logged
+    # as a warning (some bits in the mask may be advisory) rather than blocked.
     try:
         result = sw_doc.SaveAs3(str(path), 0, 1)
-        # Some bindings return a bool; treat falsy as failure only if no file written.
-        if result in (False, None) and not path.exists():
-            raise SolidWorksError(f"SaveAs3 failed for {path}.")
+        code = int(result) if isinstance(result, (int, float)) and not isinstance(result, bool) else None
+        if not path.exists():
+            raise SolidWorksError(f"SaveAs3 failed for {path} (return code={result!r}).")
+        if code is not None and code != 0:
+            log.warning("SaveAs3 for %s returned a nonzero code (%s) but the file was written "
+                       "— treating as advisory, verify the part.", path, code)
     except SolidWorksError:
         raise
     except Exception as e:
-        raise SolidWorksError(f"Saving {path} failed: {e} (errors={errors}, warnings={warnings})") from e
+        raise SolidWorksError(f"Saving {path} failed: {e}") from e
 
     log.info("Saved model: %s", path)
     return str(path)

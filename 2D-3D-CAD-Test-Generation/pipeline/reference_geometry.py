@@ -111,7 +111,13 @@ def derive_reference_geometry(model: DrawingData) -> list[RefGeom]:
         if std is None:
             continue
         axis_letter = "X" if std == "Right Plane" else "Y"
-        half = ((length or width or 0.0) / 2.0)
+        # 2026-07-28 fix: the offset must use the envelope dimension for THIS
+        # plane's own axis (length for an X mid-plane, width for a Y mid-plane)
+        # — the previous `length or width` always preferred length whenever it
+        # existed, regardless of axis_letter, so a Y-axis symmetry plane could
+        # be offset by half the LENGTH instead of half the WIDTH.
+        extent = length if axis_letter == "X" else width
+        half = (extent or 0.0) / 2.0
         _add(RefGeom(f"REF_SYM_{axis_letter}", "plane",
                      "offset" if half else "coincident",
                      f"symmetry plane ({sym.plane})", parent=std,

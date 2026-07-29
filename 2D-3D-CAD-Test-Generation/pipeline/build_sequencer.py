@@ -165,7 +165,19 @@ class SequenceResult:
 
 # ── Geometry helpers (self-contained; no macro_generator import) ─────────────
 def _feature_dim_values(model: DrawingData, feature: Feature) -> dict[str, float]:
-    """Canonical applies_to -> value for the dimensions this feature consumes."""
+    """Canonical applies_to -> value for the dimensions this feature consumes.
+
+    2026-07-28 fix: when two of a feature's related dimensions canonicalize to
+    the SAME key (e.g. two dimensions both reading as "length"), the previous
+    tie-break silently kept whichever had the LARGER numeric value — an
+    arbitrary rule with no semantic justification that could size a base/cut
+    from the wrong dimension (and fed _base_area, so it could also decide which
+    feature wins as the base). The FIRST dimension in the feature's own
+    declared related_dimensions order now wins (depth_dimension_id is checked
+    last, after the feature's primary dims) — the drawing's own declared
+    linking order is a principled choice, "biggest number" is not. A genuine
+    collision (two DIFFERENT dimension ids mapping to the same key) is logged
+    so it stays visible rather than silently resolved either way."""
     out: dict[str, float] = {}
     ids = list(feature.related_dimensions or [])
     if feature.depth_dimension_id:
@@ -175,8 +187,14 @@ def _feature_dim_values(model: DrawingData, feature: Feature) -> dict[str, float
         if d is None:
             continue
         key = d.canonical_applies_to or (d.applies_to or "").strip().lower()
-        if key and (key not in out or d.value > out[key]):
+        if not key:
+            continue
+        if key not in out:
             out[key] = float(d.value)
+        elif out[key] != float(d.value):
+            log.warning("%s: dimensions %s both canonicalize to %r (%.6g vs %.6g) — "
+                       "keeping the FIRST-declared value.",
+                       feature.id, ids, key, out[key], float(d.value))
     return out
 
 
