@@ -14,6 +14,7 @@ import pytest
 from pipeline.macro_generator import generate_macro_package
 from pipeline.macro_audit import check_anchor_annotations
 from pipeline.position_solver import (
+    _envelope,
     anchors_for,
     canonical_frame,
     datum_pair_frame,
@@ -117,6 +118,48 @@ def test_to_far_edge_semantics_adjusts_by_the_feature_own_extent():
     # to_far_edge at x=5.0 with a 2.0-wide feature -> near edge lands at 3.0.
     assert sol.x == pytest.approx(5.0 - 2.0)
     assert any("to_far_edge" in t for t in sol.trace)
+
+
+def test_envelope_recognizes_verbose_overall_labels():
+    # 2026-07-28 fix: a raw exact-match on "length"/"width" missed verbose,
+    # view-qualified labels the rest of the pipeline already normalizes via
+    # is_envelope/canonical_applies_to (e.g. "overall length (top view)").
+    m = _model(dimensions=[
+        {"id": "D001", "type": "linear", "value": 11.0, "unit": "inch",
+         "applies_to": "overall length (top view)"},
+        {"id": "D002", "type": "linear", "value": 6.25, "unit": "inch",
+         "applies_to": "width"},
+    ])
+    length, width = _envelope(m)
+    assert length == 11.0 and width == 6.25
+
+
+def test_envelope_excludes_reference_dimensions():
+    # A REF (non-controlling) "length" dimension must never clobber the real
+    # envelope value — is_envelope excludes is_reference dims.
+    m = _model(dimensions=[
+        {"id": "D001", "type": "linear", "value": 11.0, "unit": "inch",
+         "applies_to": "length"},
+        {"id": "D099", "type": "linear", "value": 99.0, "unit": "inch",
+         "applies_to": "length", "is_reference": True},
+        {"id": "D002", "type": "linear", "value": 6.25, "unit": "inch",
+         "applies_to": "width"},
+    ])
+    length, width = _envelope(m)
+    assert length == 11.0   # not 99.0 from the reference dim
+
+
+def test_envelope_excludes_feature_local_width_not_overall():
+    # A feature-local "width (front view, small feature)" must NOT be mistaken
+    # for the part's overall width — only "overall"-qualified or bare labels do.
+    m = _model(dimensions=[
+        {"id": "D001", "type": "linear", "value": 11.0, "unit": "inch", "applies_to": "length"},
+        {"id": "D050", "type": "linear", "value": 0.5, "unit": "inch",
+         "applies_to": "width (front view, small feature)"},
+        {"id": "D002", "type": "linear", "value": 6.25, "unit": "inch", "applies_to": "width"},
+    ])
+    length, width = _envelope(m)
+    assert width == 6.25   # not 0.5 from the feature-local width
 
 
 def test_to_far_edge_without_known_extent_flags_but_never_blocks():

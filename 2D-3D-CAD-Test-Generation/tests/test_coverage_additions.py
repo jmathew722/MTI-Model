@@ -57,6 +57,19 @@ class TestCornerFrameInference:
         pts = [(-2.0, -1.0)]
         assert _corner_frame_shift(m, pts) == pts
 
+    def test_mixed_axis_only_shifts_the_negative_axis(self):
+        """2026-07-28 fix: X is center-referenced (negative) but Y is already
+        correctly corner-referenced (never negative) — only X may be shifted;
+        the OLD code shifted both, corrupting the already-correct Y positions."""
+        m = _plate(10, 6)
+        out = _corner_frame_shift(m, [(-2.0, 1.0), (2.0, 4.0)])
+        assert out == [(3.0, 1.0), (7.0, 4.0)]   # x shifted by +5, y UNCHANGED
+
+    def test_mixed_axis_other_direction(self):
+        m = _plate(10, 6)
+        out = _corner_frame_shift(m, [(1.0, -1.0), (9.0, 1.0)])
+        assert out == [(1.0, 2.0), (9.0, 4.0)]   # y shifted by +3, x UNCHANGED
+
 
 # --------------------------------------------------------------------------- #
 # 3b — circular / bolt-circle patterns

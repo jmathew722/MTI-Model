@@ -7,6 +7,7 @@ polls GET /api/dwg/jobs/{id}. Static frontend is served from ../../frontend-dwg.
 from __future__ import annotations
 
 import shutil
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -51,7 +52,6 @@ def create_app() -> FastAPI:
                      output_dir: Optional[str] = Form(None)):
         if not file and not server_path:
             raise HTTPException(400, "Provide a DWG upload or a server_path.")
-        job_out = Path(output_dir) if output_dir else (_JOBS_ROOT / "pending")
         if file:
             dest = _JOBS_ROOT / "uploads"
             dest.mkdir(parents=True, exist_ok=True)
@@ -62,9 +62,18 @@ def create_app() -> FastAPI:
             dwg_path = Path(server_path)
             if not dwg_path.is_file():
                 raise HTTPException(404, f"server_path not found: {dwg_path}")
-        job = queue.submit(str(dwg_path), str(job_out / dwg_path.stem))
-        # give the job its own output dir keyed by id
-        job.output_dir = str(_JOBS_ROOT / job.id / dwg_path.stem)
+        # Compute the FINAL output_dir BEFORE enqueueing (2026-07-28 fix): the
+        # worker thread can start pulling this job off the queue the instant
+        # queue.submit() puts it there — a mutation of job.output_dir AFTER
+        # submit() returns races the worker, which may already have read the
+        # placeholder value (the previous code always lost this race in
+        # practice, silently discarding a caller-supplied output_dir every
+        # time). A directory token generated here (not job.id, which only
+        # exists after submit() returns) needs no post-hoc correction.
+        dir_token = uuid.uuid4().hex[:12]
+        job_root = Path(output_dir) / dir_token if output_dir else (_JOBS_ROOT / dir_token)
+        final_output_dir = str(job_root / dwg_path.stem)
+        job = queue.submit(str(dwg_path), final_output_dir)
         return JSONResponse({"job_id": job.id, "status": job.status.value}, status_code=202)
 
     @app.get("/api/dwg/jobs")

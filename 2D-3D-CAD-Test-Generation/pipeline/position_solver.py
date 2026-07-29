@@ -140,12 +140,25 @@ def _ground_value(anchor_ref: str, model: DrawingData,
 
 
 def _envelope(model: DrawingData) -> tuple[Optional[float], Optional[float]]:
+    """The part's overall (length, width) — 2026-07-28 fix: previously matched
+    the RAW lowercase applies_to string exactly (missing verbose/view-qualified
+    labels like "overall length (top view)" that the rest of the pipeline
+    normalizes via canonical_applies_to/is_envelope), never excluded reference
+    (non-controlling) dimensions, and used INCONSISTENT tie-break rules (length
+    took the LAST match, width took the FIRST) — a reference or feature-local
+    "length" dimension appearing later in the extraction could silently clobber
+    a correct envelope value that every OTHER stage (resolver, slot_cut,
+    feature_verify) computes consistently via is_envelope. Now uses the same
+    is_envelope/canonical_applies_to gate as the rest of the pipeline, and picks
+    the FIRST qualifying match for both axes consistently."""
     length = width = None
     for d in model.dimensions:
-        a = (d.applies_to or "").lower()
-        if a == "length" and d.value:
+        if not d.value or not d.is_envelope:
+            continue
+        token = d.canonical_applies_to
+        if token == "length" and length is None:
             length = float(d.value)
-        elif a in ("width", "height") and d.value and width is None:
+        elif token in ("width", "height") and width is None:
             width = float(d.value)
     return length, width
 

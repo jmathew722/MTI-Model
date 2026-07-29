@@ -351,13 +351,50 @@ def _spec_numbers(requirements: Optional[list[str]]) -> list[tuple[float, str]]:
     return out
 
 
-def _spec_match(cands: list[float],
-                spec_vals: list[tuple[float, str]]) -> Optional[tuple[float, str]]:
-    """The first candidate (best-guess order) that agrees with a spec value
-    within 1.5% (inch<->mm conversions tried), plus the matching spec text."""
+def _spec_line_unit_hint(text: str) -> Optional[str]:
+    """"mm"/"in" if the spec TEXT explicitly names a unit, else None (unstated —
+    assumed to be the same units as the drawing, never guessed via a coincidental
+    numeric conversion)."""
+    import re
+    t = (text or "").lower()
+    # "mm" as a unit suffix: either directly after a digit ("38mm") or as a
+    # standalone word ("38 mm") — \bmm\b alone misses the no-space case since a
+    # digit and a letter are both \w, so there is no \b between "8" and "mm".
+    if re.search(r"\d\s*mm\b|\bmm\b|millimet", t):
+        return "mm"
+    # Inch: ONLY unambiguous signals. The bare word "in" is deliberately
+    # excluded — it is an ordinary English preposition ("the hole IN the
+    # plate...", "verify IN SolidWorks") and would false-positive on nearly
+    # any operator note, incorrectly triggering a cross-unit conversion.
+    if re.search(r"\binch|\d\s*\"", t):
+        return "in"
+    return None
+
+
+def _spec_match(cands: list[float], spec_vals: list[tuple[float, str]],
+                drawing_units: str = "inch") -> Optional[tuple[float, str]]:
+    """The first candidate (best-guess order) that agrees with a spec value,
+    plus the matching spec text.
+
+    The mm<->inch conversion is only attempted when the spec TEXT explicitly
+    names a unit that CONTRADICTS the drawing's units (e.g. drawing in inches,
+    spec line says "38mm") — previously every spec value was tried against
+    EVERY conversion unconditionally, so a spec value with no stated unit
+    (operator shorthand, same units as the drawing by convention) could match a
+    candidate purely by numeric coincidence (audit example: drawing candidate
+    25.4, spec value "1" with no unit -> matched via 1*25.4, locked in as
+    "spec_driven" HIGH confidence on a coincidence). With no explicit
+    contradicting unit, only the DIRECT value is compared — no conversion."""
+    drawing_is_mm = drawing_units.lower() in ("mm", "millimeter", "millimeters")
     for cand in cands:
         for sv, text in spec_vals:
-            for conv in (sv, sv * 25.4, sv / 25.4):
+            hint = _spec_line_unit_hint(text)
+            convs = [sv]
+            if hint == "mm" and not drawing_is_mm:
+                convs.append(sv / 25.4)     # spec stated in mm, drawing in inch
+            elif hint == "in" and drawing_is_mm:
+                convs.append(sv * 25.4)     # spec stated in inch, drawing in mm
+            for conv in convs:
                 if conv > 0 and abs(cand - conv) / max(conv, 1e-9) <= 0.015:
                     return cand, text
     return None
@@ -632,7 +669,7 @@ def _resolve_dimension(dim: dict, model: DrawingData,
     # over the generic decision tree: when a candidate agrees with a spec value,
     # resolve to it and flag the resolution as spec-driven.
     if cands and spec_vals:
-        matched = _spec_match(cands, spec_vals)
+        matched = _spec_match(cands, spec_vals, drawing_units=str(model.units.value))
         if matched is not None:
             value, spec_text = matched
             note = (
@@ -927,24 +964,46 @@ def _ensure_buildable_extrudes(resolved: dict, model: DrawingData, result: "Reso
     deepest = max(sub_depths, default=0.0)
     thickness = round(max(nominal, deepest + nominal), 4)
 
+    # Only the FIRST extrude_boss (drawing convention: the base is declared
+    # first) is treated as THE base solid needing a guaranteed thickness. A
+    # SECOND extrude_boss without a readable depth is not necessarily missing
+    # a dimension — it may legitimately take its height from a dimension it
+    # doesn't directly reference (shared with the base, or a stepped-pad height
+    # relative to the base) — synthesizing an assumed-base-thickness note on it
+    # previously implied it was THE base when it may not be. It still gets a
+    # value (never an empty/broken solid), but the note is now honest about
+    # which feature this is.
+    seen_boss = False
     for feat in resolved.get("features", []) or []:
         if (feat.get("type") or "").lower() != "extrude_boss":
             continue
+        is_base = not seen_boss
+        seen_boss = True
         if _feature_has_depth(feat, dims_by_id):
             continue
         new_id = _next_dim_id(resolved)
         fid = feat.get("id", "?")
-        note = (
-            f"THICKNESS ASSUMED for base {fid}: the drawing does not dimension the part "
-            f"thickness, so {new_id}={_fmt(thickness)} {units} was synthesized so a solid "
-            f"could be built — MUST set the real thickness in SolidWorks before rebuild."
-        )
+        if is_base:
+            note = (
+                f"THICKNESS ASSUMED for base {fid}: the drawing does not dimension the part "
+                f"thickness, so {new_id}={_fmt(thickness)} {units} was synthesized so a solid "
+                f"could be built — MUST set the real thickness in SolidWorks before rebuild."
+            )
+        else:
+            note = (
+                f"THICKNESS ASSUMED for secondary boss {fid} (not the base solid): no depth "
+                f"dimension is linked to this feature — it may share a dimension with another "
+                f"feature that was not detected. {new_id}={_fmt(thickness)} {units} was "
+                f"synthesized as a placeholder — VERIFY the real height against the drawing "
+                f"before rebuild (this is more likely to be wrong than the base thickness)."
+            )
         new_dim = {
             "id": new_id, "type": "depth", "value": thickness, "unit": units,
             "applies_to": "thickness", "feature_ref": fid,
             "notes": "Synthesized by Stage 2.5 — thickness not dimensioned on the drawing.",
         }
-        dres = DimResolution(new_id, thickness, True, "default_base_thickness", [], 0.25,
+        basis = "default_base_thickness" if is_base else "default_secondary_boss_thickness"
+        dres = DimResolution(new_id, thickness, True, basis, [], 0.25,
                              "CRITICAL", note)
         new_dim.update(dres.as_fields())
         resolved.setdefault("dimensions", []).append(new_dim)

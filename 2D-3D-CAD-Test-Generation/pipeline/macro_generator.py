@@ -302,6 +302,15 @@ def _corner_frame_shift(model: DrawingData, positions: list[tuple[float, float]]
     an unambiguous signal of center-referencing — the corner frame has no negatives —
     so when the envelope is known we re-origin by half the envelope, putting the
     holes where they were drawn instead of off the part.
+
+    2026-07-28 fix: the shift is now decided and applied PER AXIS independently.
+    Previously ANY negative coordinate on EITHER axis re-origined BOTH x and y —
+    a part dimensioned from a center datum in X but a genuinely corner-referenced
+    Y (or a mixed-frame extraction where only some holes read negative) had its
+    already-correct axis corrupted along with the one that needed the shift. A
+    part that is truly center-referenced in both axes (the common case) gets the
+    identical result as before — this only changes the mixed/single-axis case,
+    which the old code always got wrong.
     """
     if not positions:
         return positions
@@ -310,8 +319,10 @@ def _corner_frame_shift(model: DrawingData, positions: list[tuple[float, float]]
         return positions
     min_x = min(p[0] for p in positions)
     min_y = min(p[1] for p in positions)
-    if min_x < 0 or min_y < 0:
-        return [(x + length / 2.0, y + width / 2.0) for x, y in positions]
+    dx = length / 2.0 if min_x < 0 else 0.0
+    dy = width / 2.0 if min_y < 0 else 0.0
+    if dx or dy:
+        return [(x + dx, y + dy) for x, y in positions]
     return positions
 
 

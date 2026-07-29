@@ -225,6 +225,29 @@ class TestBuildableBaseThickness:
         base = next(s for s in plan["steps"] if s["type"] == "extrude_boss")
         assert base["dimensions_meters"].get("depth") or base["dimensions_meters"].get("thickness")
 
+    def test_only_first_boss_is_treated_as_the_base(self):
+        """2026-07-28 fix: a SECOND undimensioned extrude_boss (a stepped pad,
+        say) must not be silently treated as THE base — it still gets a
+        synthesized value (never an empty solid) but with an honest,
+        distinguishing basis/note rather than implying it IS the base."""
+        d = self._disc_without_thickness()
+        d["features"].append({
+            "id": "F002", "type": "extrude_boss", "description": "raised pad",
+            "related_dimensions": [],
+        })
+        res = resolve_extraction(d)
+        f001 = next(f for f in res.resolved_extraction["features"] if f["id"] == "F001")
+        f002 = next(f for f in res.resolved_extraction["features"] if f["id"] == "F002")
+        d001 = next(x for x in res.resolved_extraction["dimensions"]
+                    if x["id"] == f001["depth_dimension_id"])
+        d002 = next(x for x in res.resolved_extraction["dimensions"]
+                    if x["id"] == f002["depth_dimension_id"])
+        assert d001["assumption_basis"] == "default_base_thickness"
+        assert d002["assumption_basis"] == "default_secondary_boss_thickness"
+        assert "not the base solid" in d002["human_note"]
+        # Both still resolve to a real positive value — never an empty solid.
+        assert d001["value"] > 0 and d002["value"] > 0
+
 
 class TestSchemaCleanAndVerification:
     def test_clean_extraction_validates_against_strict_schema(self):
