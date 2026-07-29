@@ -93,16 +93,49 @@ def build_sldprt_for_part(sw_app, model, part_dir: Path, name: str,
                 json.dumps({"results": feature_results}, indent=2), encoding="utf-8")
         except OSError as e:
             log.warning("Could not write macro_result.json: %s", e)
-    build_caveats = [w for w in (getattr(model, "warnings", []) or []) if w not in pre_warnings]
-    sldprt = save_model(sw_doc, name, part_dir)
-    # Export an STL with the SAME base name as the .sldprt so the web UI's 3D
-    # viewer can locate it. Non-fatal — a good .sldprt is not lost to an STL error.
-    try:
-        export_stl(sw_doc, name, part_dir)
-    except SolidWorksError as e:
-        log.warning("STL export failed for %s (continuing): %s", name, e)
 
-    vreport = validate_model(sw_doc, model)
+    def _close_sw_doc(sldprt_path: Optional[str]) -> None:
+        """Close ``sw_doc`` so the .sldprt is not left locked (a locked file
+        breaks re-runs and the Downloads copy). Called from a ``finally`` below
+        so a SolidWorksError from save_model/export_stl/validate_model — after
+        build_model already succeeded — can no longer leak the document (2026-
+        07-28: this used to sit at the tail of the happy path only, so any
+        exception in between skipped it entirely). CloseDoc keys on the window
+        title, which can be either the bare title or the file name depending on
+        save state — try every candidate. Under late-bound COM, GetTitle is a
+        PROPERTY (calling it raises "'str' object is not callable"), so read it
+        defensively."""
+        titles: set[str] = set()
+        if sldprt_path:
+            titles |= {Path(sldprt_path).name, Path(sldprt_path).stem}
+        try:
+            t = sw_doc.GetTitle
+            titles.add(str(t() if callable(t) else t))
+        except Exception:
+            pass
+        for title in titles:
+            if not title:
+                continue
+            try:
+                sw_app.CloseDoc(title)
+            except Exception:
+                pass
+
+    build_caveats = [w for w in (getattr(model, "warnings", []) or []) if w not in pre_warnings]
+    sldprt: Optional[str] = None
+    try:
+        sldprt = save_model(sw_doc, name, part_dir)
+        # Export an STL with the SAME base name as the .sldprt so the web UI's 3D
+        # viewer can locate it. Non-fatal — a good .sldprt is not lost to an STL error.
+        try:
+            export_stl(sw_doc, name, part_dir)
+        except SolidWorksError as e:
+            log.warning("STL export failed for %s (continuing): %s", name, e)
+
+        vreport = validate_model(sw_doc, model)
+    except Exception:
+        _close_sw_doc(sldprt)
+        raise
     lines = [f"MODEL CHECK — {name}", "=" * 40, f"Saved: {sldprt}", ""]
     for p in vreport.get("passed", []):
         lines.append(f"[PASS] {p}")
@@ -142,24 +175,7 @@ def build_sldprt_for_part(sw_app, model, part_dir: Path, name: str,
         except OSError as e:
             log.warning("Could not write _deferred_log.json: %s", e)
 
-    # Close the document so the .sldprt is not left locked (a locked file breaks
-    # re-runs and the Downloads copy). CloseDoc keys on the window title, which can
-    # be either the bare title or the file name depending on save state — try every
-    # candidate. Under late-bound COM, GetTitle is a PROPERTY (calling it raises
-    # "'str' object is not callable"), so read it defensively.
-    titles: set[str] = {Path(sldprt).name, Path(sldprt).stem}
-    try:
-        t = sw_doc.GetTitle
-        titles.add(str(t() if callable(t) else t))
-    except Exception:
-        pass
-    for title in titles:
-        if not title:
-            continue
-        try:
-            sw_app.CloseDoc(title)
-        except Exception:
-            pass
+    _close_sw_doc(sldprt)
 
     # Remove build-time intermediates so the delivered folder holds exactly one
     # model per part: SolidWorks autosaves, lock files, and the pre-rename save
