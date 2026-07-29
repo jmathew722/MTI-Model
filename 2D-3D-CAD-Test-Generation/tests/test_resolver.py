@@ -366,3 +366,50 @@ class TestCriticalFlagVba:
         text = macro.read_text(encoding="utf-8")
         assert "CRITICAL ASSUMPTION" in text
         assert "vbOKCancel" in text
+
+
+class TestQuarantineInvalidDimensionValue:
+    """2026-07-28 fix: a single non-positive/missing dimension value (the
+    extraction prompt tells the model to emit 0.0 for an unknown field, which
+    schema.py's value_must_be_positive validator then rejects) used to sink the
+    WHOLE part to _value_only_resolution — every OTHER dimension flagged
+    CRITICAL and completeness/slot/position-solving skipped for perfectly good
+    features. The bad field must now be quarantined alone."""
+
+    def _plate_with_one_bad_dimension(self):
+        d = _plate_with_holes()
+        # D001 (length) — a valid, otherwise-clean dimension — must resolve
+        # normally even though D999 elsewhere in the SAME extraction is broken.
+        d["dimensions"].append(
+            {"id": "D999", "type": "linear", "value": 0.0, "unit": "inch",
+             "applies_to": "chamfer_distance"})
+        return d
+
+    def test_other_dimensions_resolve_normally_not_value_only(self):
+        res = resolve_extraction(self._plate_with_one_bad_dimension())
+        d001 = res.dim_resolutions["D001"]
+        # A clean, explicit dimension must NOT be downgraded to the
+        # "value_only_fallback" basis just because a DIFFERENT field was bad.
+        assert d001.assumption_basis != "value_only_fallback"
+        assert d001.flag_tier == "HIGH"
+        assert d001.resolved_value == 11.0
+
+    def test_bad_dimension_itself_is_flagged_not_crashed(self):
+        res = resolve_extraction(self._plate_with_one_bad_dimension())
+        d999 = res.dim_resolutions["D999"]
+        assert d999.resolved_value > 0            # never null/zero downstream
+        assert d999.flag_tier in ("HIGH", "CRITICAL", "MEDIUM")
+
+    def test_features_still_get_full_resolution_pipeline(self):
+        # Feature resolution (build_status) must run normally for F001/F002 —
+        # the old cliff skipped feature resolution entirely for the whole part.
+        res = resolve_extraction(self._plate_with_one_bad_dimension())
+        assert res.feature_resolutions["F001"].build_status == "build"
+        assert res.feature_resolutions["F002"].build_status == "build"
+
+    def test_genuinely_malformed_extraction_still_falls_back_safely(self):
+        # A structurally broken extraction (wrong types entirely) must still
+        # hit the value-only fallback rather than raise.
+        res = resolve_extraction({"dimensions": [{"id": "D1", "value": "not-a-number"}],
+                                  "features": [], "units": 123})
+        assert res.dim_resolutions["D1"].assumption_basis == "value_only_fallback"

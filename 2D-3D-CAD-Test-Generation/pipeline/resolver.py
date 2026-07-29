@@ -1993,9 +1993,25 @@ def resolve_extraction(raw: dict,
     result = ResolutionResult(resolved_extraction=resolved)
     spec_vals = _spec_numbers(requirements)
 
+    # A single non-positive/missing dimension value (the extraction prompt tells
+    # the model to emit 0.0 for an unknown field — schema.py's Dimension.value
+    # validator then rejects the WHOLE model on that one field) used to sink the
+    # ENTIRE part to _value_only_resolution: every OTHER dimension flagged
+    # CRITICAL, and the completeness gate, slot decomposition, position solving,
+    # and hole classification all skipped for features that were perfectly fine.
+    # Quarantine just the offending field(s) — mark them value_unclear so the
+    # EXISTING per-dimension resolution ladder (candidates -> arithmetic chain ->
+    # geometric validity -> conservative -> last-resort) handles them exactly
+    # like any other ambiguous reading — before validating, so the rest of a
+    # mostly-good extraction is never collapsed by one bad field.
+    coerced_ids = _quarantine_invalid_dimension_values(resolved)
+    for cid in coerced_ids:
+        log.warning("resolver: dimension %s had a non-positive/missing value — "
+                    "quarantined as ambiguous instead of sinking the whole part.", cid)
+
     try:
-        model = DrawingData.model_validate(raw)
-    except Exception as e:  # shape is wrong; resolve what we trivially can
+        model = DrawingData.model_validate(resolved)
+    except Exception as e:  # shape is wrong beyond the quarantine; resolve what we trivially can
         log.warning("resolver: extraction did not validate (%s); applying value-only resolution", e)
         _value_only_resolution(resolved, result)
         return result
@@ -2208,6 +2224,38 @@ def _summary_dict(s: ResolutionSummary) -> dict:
         "rebuild_confidence": round(s.rebuild_confidence, 3),
         "plain_english": s.plain_english,
     }
+
+
+def _quarantine_invalid_dimension_values(resolved: dict) -> list[str]:
+    """Fix up any dimension whose ``value`` would fail schema validation
+    (non-positive, missing, or non-numeric — most commonly the model emitting
+    the documented ``0.0`` for an unknown field) so ``model_validate`` succeeds
+    for the WHOLE extraction instead of falling back to value-only for every
+    dimension. Mutates ``resolved`` in place. Returns the quarantined dimension
+    ids for logging.
+
+    A positive placeholder value is required only so pydantic's
+    ``value_must_be_positive`` accepts the record — the dimension is marked
+    ``value_unclear``/``ambiguity_reason`` so the normal per-dimension resolution
+    ladder (never this function) picks the real value from any
+    ``possible_values``, a chain, or a conservative default."""
+    quarantined: list[str] = []
+    for dim in resolved.get("dimensions", []) or []:
+        val = dim.get("value")
+        ok = isinstance(val, (int, float)) and not isinstance(val, bool) and val > 0
+        if ok:
+            continue
+        quarantined.append(dim.get("id", "?"))
+        pvs = [p for p in (dim.get("possible_values") or [])
+               if isinstance(p, (int, float)) and not isinstance(p, bool) and p > 0]
+        dim["value"] = float(pvs[0]) if pvs else 1.0
+        dim["value_unclear"] = True
+        reason = dim.get("ambiguity_reason") or ""
+        if not reason.strip():
+            dim["ambiguity_reason"] = (
+                f"Extracted value {val!r} was non-positive/missing (schema requires > 0); "
+                "quarantined for the normal ambiguity-resolution ladder.")
+    return quarantined
 
 
 def _value_only_resolution(resolved: dict, result: ResolutionResult) -> None:
