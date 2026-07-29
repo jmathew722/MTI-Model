@@ -128,28 +128,42 @@ def _candidate_scales(model: DrawingData, geom: DocGeometry) -> list[tuple[float
     return anchors
 
 
-def _consensus_scale(anchors: list[tuple[float, str]]) -> tuple[float, int]:
-    """Largest cluster of agreeing anchors → (scale, cluster size).
+def _is_exact_anchor(lbl: str) -> bool:
+    return lbl.startswith("declared") or lbl.startswith("outline")
 
-    Within the winning cluster, the scale value averages only the EXACT anchor
-    kinds (declared units, outline-vs-envelope) when any are present — circle
-    diameters vote for cluster membership but carry fit error (Bézier
-    approximation, Hough), so they must not perturb an exactly-known scale.
+
+def _consensus_scale(anchors: list[tuple[float, str]]) -> tuple[float, int, bool]:
+    """Largest cluster of agreeing anchors → (scale, cluster size, exact_backed).
+
+    Clusters that contain at least one EXACT anchor (declared native units, or
+    outline-vs-envelope — both derived from a real dimension, not a fit) are
+    ALWAYS preferred over a purely diameter-vote cluster, regardless of raw
+    cluster size. Diameter anchors carry Bézier/Hough fit error AND, on a sheet
+    with many equal-diameter holes across multiple views, can simply out-number
+    the single genuine exact cluster — letting cardinality alone pick the winner
+    previously let a coincidental diameter-ratio cluster win the GLOBAL scale (a
+    silent wrong-position hazard at reported confidence 0.95). Only when NO
+    cluster contains an exact anchor does the largest diameter-vote cluster win
+    (with exact_backed=False so the caller can lower confidence accordingly).
+    Within the winning cluster, the scale value averages only the exact anchors
+    when any are present (diameters still vote for membership, never for value).
     """
-    best: list[tuple[float, str]] = []
+    clusters: list[list[tuple[float, str]]] = []
     for s, _ in anchors:
         if s <= 0:
             continue
         cluster = [(t, lbl) for t, lbl in anchors
                    if t > 0 and abs(t - s) / s <= ANCHOR_AGREE_RTOL]
-        if len(cluster) > len(best):
-            best = cluster
-    if not best:
-        return 0.0, 0
-    exact = [t for t, lbl in best
-             if lbl.startswith("declared") or lbl.startswith("outline")]
+        clusters.append(cluster)
+    if not clusters:
+        return 0.0, 0, False
+
+    exact_clusters = [c for c in clusters if any(_is_exact_anchor(lbl) for _, lbl in c)]
+    pool = exact_clusters if exact_clusters else clusters
+    best = max(pool, key=len)
+    exact = [t for t, lbl in best if _is_exact_anchor(lbl)]
     vals = exact if exact else [t for t, _ in best]
-    return sum(vals) / len(vals), len(best)
+    return sum(vals) / len(vals), len(best), bool(exact)
 
 
 def _diam_tol(diameter: float, units: Units) -> float:
@@ -232,7 +246,7 @@ def resolve_holes(model: DrawingData, geom: DocGeometry) -> HoleResolutionReport
 
     # ---- 3. SCALE RESOLUTION -------------------------------------------------
     anchors = _candidate_scales(model, geom)
-    scale, n_agree = _consensus_scale(anchors)
+    scale, n_agree, exact_backed = _consensus_scale(anchors)
     rep.scale, rep.scale_anchors = scale, n_agree
     if scale <= 0 or n_agree == 0:
         rep.notes.append("Scale could not be anchored (no dimension callout matches "
@@ -247,6 +261,16 @@ def resolve_holes(model: DrawingData, geom: DocGeometry) -> HoleResolutionReport
     if n_agree < 2:
         scale_flag = ("HIGH", "Drawing scale anchored by only ONE dimension match — "
                               "verify one hole position against the drawing.")
+        rep.notes.append(scale_flag[1])
+    elif not exact_backed:
+        # The winning cluster is corroborated ONLY by diameter-ratio votes (no
+        # declared-units or outline-vs-envelope anchor agreed with it) — the
+        # scale is plausible but not confirmed by an exact dimension, so every
+        # position it produces is capped below vector_exact confidence rather
+        # than reported at full trust.
+        scale_flag = ("MEDIUM", "Drawing scale is corroborated only by hole-diameter "
+                                "ratios (no declared-unit or outline dimension confirmed "
+                                "it) — positions are plausible but not exactly anchored.")
         rep.notes.append(scale_flag[1])
 
     # ---- Part origin (lower-left) in native units ------------------------------
@@ -333,9 +357,15 @@ def resolve_holes(model: DrawingData, geom: DocGeometry) -> HoleResolutionReport
         conf = base_conf
         if all(c.center_marked for c in matched):
             conf = min(0.99, conf + 0.02)
+        if not exact_backed:
+            # The global scale itself rests only on diameter-ratio votes (no
+            # declared-unit/outline anchor agreed) — cap confidence so a
+            # coincidentally-clustered wrong scale can never report as fully
+            # trusted "vector_exact" (previously it could reach 0.95-0.97).
+            conf = min(conf, 0.75)
         if hr.outcome != "diameter_conflict":
             # Diameter agreement between callout and vector measurement → HIGH.
-            if abs(measured_d - h.diameter) <= _diam_tol(h.diameter, model.units):
+            if abs(measured_d - h.diameter) <= _diam_tol(h.diameter, model.units) and exact_backed:
                 hr.outcome = "vector_exact" if len(matched) == h.qty else "partial"
             else:  # matched within tolerance by construction; defensive
                 hr.outcome = "partial"
