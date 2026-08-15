@@ -1,0 +1,64 @@
+LEARNING LOOP — 158-C-Rev2
+============================================================
+Run:     2026-08-15 13:20:45
+Status:  READY
+Model:   claude-sonnet-5
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\2625915ff013\A001611E\output\158-C-Rev2
+Fingerprint: 9978e220db032bd7
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — READY
+   - No gate failures (run reached READY).
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [LOW] The side/edge view shows a stepped or tabbed feature at the left end that is not clearly dimensioned or explained from the front view alone; it's unclear if this represents a formed bend, a separate tab, or just the drawing's simplified end representation.
+       -> Verify with the model (VERT.90) or a 3D model/section view whether the plate has a formed edge/lip at the left end matching the side view step.
+   - [LOW] Two inspection balloons (1 and 2, with 2 sub-referenced as 2/2 and value 6.25 IN.) appear near the side/edge view but are not clearly tied to specific dimensions in the front view; balloon 2 references 6.25 IN which matches the front view's 6.25 height dimension, but balloon 1 has no stated value.
+       -> Cross-check inspection report keyed to balloons 1 and 2 to confirm balloon 1's target dimension (likely 11.00 or another key dimension) and confirm it is not a geometry conflict.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 2, HIGH 2, MEDIUM 1, LOW 2
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout "THIRD ANGLE PROJECTION / DIMENSIONS IN INCHES / 2 PLACE DIM ±.02 / 3 PLACE DIM ±.010 / ANGULAR DIM ± / SCALE 1"=1"" states 2 instance(s), but the per-view extraction captured hole group(s) of [6] (total 6). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] F004 (build): The .sldprt build SKIPPED feature F004 (fillet): FeatureFillet3 returned None for F004 despite verified preconditions (radius=0.006350 m, 42 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: FeatureFillet3 returned None for F004 despite verified preconditions (radius=0.006350 m, 42 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+       affects: feature F004
+   - [HIGH] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front, side_edge): The side/edge view shows a stepped or tabbed feature at the left end that is not clearly dimensioned or explained from the front view alone; it's unclear if this represents a formed bend, a separate tab, or just the drawing's simplified end representation. Recommendation: Verify with the model (VERT.90) or a 3D model/section view whether the plate has a formed edge/lip at the left end matching the side view step.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [HIGH] OV-002 (overview_analysis): INSPECTION-BALLOON REFERENCE (side_edge, front): Two inspection balloons (1 and 2, with 2 sub-referenced as 2/2 and value 6.25 IN.) appear near the side/edge view but are not clearly tied to specific dimensions in the front view; balloon 2 references 6.25 IN which matches the front view's 6.25 height dimension, but balloon 1 has no stated value. Recognized as an inspection dimension balloon (circled numeral / 'IN.' value), attached to part metadata — NOT a competing geometry dimension, so it is excluded from dimension-conflict reconciliation.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM]  (build): Build caveat: F004 (fillet) skipped: FeatureFillet3 returned None for F004 despite verified preconditions (radius=0.006350 m, 42 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [LOW] OV004 (overview): Surface Finish note: Weather stripping (sponge rubber with adhesive back) applied along an edge of the part, 12.5 in length, 5/32 thk x 1/2 wide, per parts list item 2 (along one edge of plate, per side view).
+       decision: attached to part metadata as a surface finish note
+       why: a note, not part geometry — no build counterpart expected
+       affects: metadata: surface finish
+   - [LOW] OV005 (overview): Thickness-view value 0.105 is out of plausible range vs the build thickness 1.88 (18x) (bottom side view of plate edge) [gauge 12]; treated as a non-thickness number, not a conflict.
+       decision: ignored as an out-of-band capture, build thickness kept
+       why: an edge-view thickness cannot differ from the build by an order of magnitude — the extractor captured an unrelated dimension
+       affects: metadata: rejected thickness candidate
+
+5. BUILD / MACRO FEATURE FAILURES
+   - feature F004 FAILED: FeatureFillet3 returned None for F004 despite verified preconditions (radius=0.006350 m, 42 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this radius (radius exceeds the adjacent face).
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '158-C-Rev2' finished READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * macro: solidworks_builder.py (COM feature build) + macro_generator.py (VBA for that feature type)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+     * skipped: macro_generator.py / solidworks_builder.py (prohibited/unsupported feature — add real support or a better manual step)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\2625915ff013\A001611E\output\158-C-Rev2

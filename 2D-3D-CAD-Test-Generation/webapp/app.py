@@ -274,7 +274,7 @@ def _start_run(cmd: list[str], output_dir: Path, run_id: str | None = None,
                     state["lines"].append(f"[delivered outputs to] {paths['downloads']}")
             state["done"] = True
             state["finished"] = time.time()
-            # Persist the console transcript with the run so Sheet 4's Console
+            # Persist the console transcript with the run so Sheet 3's Console
             # sub-tab works for historical runs, not just the live one.
             try:
                 (output_dir / "ui_console.log").write_text(
@@ -1911,7 +1911,7 @@ async def explainer_chat(request: Request):
 
 
 # ── Shared run history: ONE persistent inventory of completed runs ─────────────
-# Backs BOTH Sheet 2's "Select Model" dropdown and Sheet 4's "Select Run"
+# Backs BOTH Sheet 2's "Select Model" dropdown and Sheet 3's "Select Run"
 # dropdown, so the two can never disagree. Sourced from disk (webapp/parts/
 # <session>/<part>/output), not in-memory state — runs survive server restarts
 # and browser sessions.
@@ -1994,7 +1994,7 @@ def clear_run_history():
     """Clear ALL stored run outputs (the source of the shared run history).
 
     Deletes every ``webapp/parts/<session>/<part>/output`` folder, emptying
-    both Sheet 2's model dropdown and Sheet 4's run dropdown. The saved part
+    both Sheet 2's model dropdown and Sheet 3's run dropdown. The saved part
     inputs (views, specs) are untouched — every part can simply be re-run —
     and the delivered copies in ``UI_Output/`` and ``~/Downloads`` are NOT
     touched (they are the user's deliverables, not the browsing store)."""

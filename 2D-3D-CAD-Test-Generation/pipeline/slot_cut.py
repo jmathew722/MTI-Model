@@ -168,6 +168,25 @@ def rounded_profile_from_corners(corners: list[list[float]], radius: float,
     if r <= 0:
         return [list(c) for c in corners]
 
+    # Feasibility guard: a corner radius that can't fit produces a
+    # self-intersecting wire, which OCCT rejects with the opaque
+    # "StdFail_NotDone: BRep_API: command not done" (crashing CadQuery
+    # pre-validation). Two arcs on corners sharing an edge of length L overlap
+    # when r_i + r_j > L; a single arc overshoots an edge with one rounded end
+    # when r > L. When either is violated the radius is geometrically
+    # impossible for this slot — fall back to the SHARP rectangle (the same
+    # geometry the VBA/COM path builds when it defers the corner fillet). The
+    # radius is never silently clamped to fit: the resolver has already raised
+    # this as a CRITICAL flag (2R > width); here we simply refuse to emit an
+    # invalid profile rather than shrink the fillet.
+    for i in range(n):
+        j = (i + 1) % n
+        L = math.hypot(corners[j][0] - corners[i][0],
+                       corners[j][1] - corners[i][1])
+        need = (r if i in rounded_idx else 0.0) + (r if j in rounded_idx else 0.0)
+        if need > L + 1e-9:
+            return [list(c) for c in corners]
+
     pts: list[list[float]] = []
     for i in range(n):
         cx, cy = corners[i]

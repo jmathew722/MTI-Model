@@ -72,6 +72,20 @@ def test_rounded_profile_no_radius_is_the_rectangle():
     assert rounded_profile_from_corners(corners, 0.0, "open_notch") == corners
 
 
+def test_impossible_radius_falls_back_to_sharp_rectangle():
+    """SB16247 (0178302E): a slot 0.75 wide with a 0.531 corner radius has
+    2R = 1.062 > 0.75, so the two bottom corner arcs would self-intersect. That
+    invalid wire is what made OCCT throw 'StdFail_NotDone: BRep_API: command not
+    done' and crash CadQuery pre-validation. The radius is never silently
+    clamped (the resolver flags it CRITICAL); instead the profile falls back to
+    the sharp rectangle — the same geometry the VBA/COM path cuts when it defers
+    the corner fillet."""
+    corners = [[1.625, -14.75], [2.375, -14.75], [2.375, 0.8], [1.625, 0.8]]
+    assert rounded_profile_from_corners(corners, 0.531, "open_notch") == corners
+    # A radius that DOES fit (2R = 0.6 <= 0.75) still rounds.
+    assert len(rounded_profile_from_corners(corners, 0.3, "open_notch")) > 4
+
+
 # --------------------------------------------------------------------------- #
 # Pattern-of-slot expansion (the 16247 two-notch case)
 # --------------------------------------------------------------------------- #

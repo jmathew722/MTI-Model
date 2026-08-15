@@ -1,0 +1,56 @@
+LEARNING LOOP — SB16247
+============================================================
+Run:     2026-07-25 12:31:23
+Status:  NOT READY
+Model:   claude-sonnet-5
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\d33551be925a\0178302E\output\SB16247
+Fingerprint: 5d343dc80feb93e8
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — NOT READY
+   - overview verification found CRITICAL gap(s)
+   - pre-validation error: StdFail_NotDone: BRep_API: command not done
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - verification error: StdFail_NotDone: BRep_API: command not done
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [LOW] The .531 R. TYP callout with leader points to the bottom rounded cutout, implying the same radius applies to the top notch profile as well (both ends have similar rounded slot ends), but only one instance is explicitly dimensioned with the radius leader; the top notch's radius is not separately confirmed by a dimension in the same view.
+       -> Verify by scaling/comparing the top notch radius to the bottom cutout radius to confirm both are .531 R., or check if a separate radius callout exists that was cropped/omitted.
+   - [LOW] Overall length is dimensioned as 19.25 (top to a point) and 16.500 (top to bottom cutout start) and 1.00 (bottom cutout to bottom edge), but these three stacked dimensions are not clearly shown to sum exactly to a single confirmed overall length in the same dimension chain, creating minor ambiguity in stack-up.
+       -> Confirm that 16.500 + 1.00 plus any gap equals 19.25, or that these are independent reference dimensions from a common datum (likely the top edge) rather than a chain, to avoid stack-up error.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 1, HIGH 2, MEDIUM 1, LOW 1
+   - [CRITICAL] OV002 (overview): The overview clearly shows 2x fillet (.531 R (typical) rounded fillets at the top and bottom ends of the internal slot/cutout, top and bottom ends of the internal cutout) but the build contains no matching feature.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: fillet feature(s) — verify against the drawing
+   - [HIGH] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front): The .531 R. TYP callout with leader points to the bottom rounded cutout, implying the same radius applies to the top notch profile as well (both ends have similar rounded slot ends), but only one instance is explicitly dimensioned with the radius leader; the top notch's radius is not separately confirmed by a dimension in the same view. Recommendation: Verify by scaling/comparing the top notch radius to the bottom cutout radius to confirm both are .531 R., or check if a separate radius callout exists that was cropped/omitted. [request-full-sheet: this looks like a cropped/off-sheet region — upload the complete sheet rather than re-running.]
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [HIGH] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (front): Overall length is dimensioned as 19.25 (top to a point) and 16.500 (top to bottom cutout start) and 1.00 (bottom cutout to bottom edge), but these three stacked dimensions are not clearly shown to sum exactly to a single confirmed overall length in the same dimension chain, creating minor ambiguity in stack-up. Recommendation: Confirm that 16.500 + 1.00 plus any gap equals 19.25, or that these are independent reference dimensions from a common datum (likely the top edge) rather than a chain, to avoid stack-up error.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV005 (overview): The overview POSSIBLY shows 1x chamfer (No chamfers clearly visible on this part, n/a) with no matching feature in the build.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: chamfer feature(s) — verify against the drawing
+   - [LOW] OV004 (overview): Stock/thickness view noted: Small tick/line marks along the right edge profile view, possibly representing layer lines or stock allowance markers (right edge, side profile view).
+       decision: recorded as the part's thickness reference
+       why: a thickness edge view is not a machinable feature
+       affects: metadata: stock thickness
+
+5. BUILD / MACRO FEATURE FAILURES
+   - none
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part 'SB16247' finished NOT READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+     * prevalidation: cq_prevalidate.py (CadQuery geometry) vs build_plan.json (the single source of truth both build paths consume)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\d33551be925a\0178302E\output\SB16247

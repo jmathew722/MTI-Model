@@ -1,0 +1,58 @@
+LEARNING LOOP — 156-C-RevE
+============================================================
+Run:     2026-07-25 11:09:23
+Status:  NOT READY
+Model:   claude-sonnet-5
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\0b791c651230\A091061M\output\156-C-RevE
+Fingerprint: 65f33f6e829f4136
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — NOT READY
+   - 1 reconciliation item(s) unresolved after 1 pass(es) — see 156-C-RevE_reconciliation_report.json
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [MEDIUM] The 7 hole locations are dimensioned individually via a rectangular X/Y coordinate scheme (offsets .25, 5.250, 10.500 horizontally and .375, 2.875, 5.875 vertically) rather than a single leader count; visually there appear to be exactly 7 hole circles (4 corners, 2 mid-left/right, and one additional at bottom-right near the .218 DR THRU leader), which matches the '7-HOLES' callout, but the pattern is NOT symmetric (asymmetric hole at bottom right beyond the corner hole) - this could be misread as a symmetric 8-hole pattern if corners are assumed mirrored on both sides.
+       -> Verify hole count and locations directly against the 7 dimensioned X/Y positions in the front view; do not assume full corner symmetry (e.g., no hole is shown at top-right corner separate from the mid-right and bottom-right holes) - confirm each of the 7 physical hole centers against the coordinate dimensions given.
+   - [LOW] The dashed inner rectangle in the front view is not explicitly labeled; it could be misinterpreted as a hidden edge, step, or bend line of the plate itself rather than the outline of the adhesive weatherstripping called out in the BOM (23 IN, item 2).
+       -> Confirm with the BOM and any additional notes that the dashed rectangle represents the weatherstripping installation outline, not a machined or formed feature of the steel plate; check for a leader line connecting the dashed rectangle to the weatherstripping BOM item if available on the original sheet.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 2, HIGH 1, MEDIUM 1, LOW 2
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout "UNLESS OTHERWISE SPECIFIED: THIRD ANGLE PROJECTION, DIMENSIONS IN INCHES, 2 PLACE DIM ±.02, 3 PLACE DIM ±.010, ANGULAR DIM ±, SCALE 1"=1"" states 2 instance(s), but the per-view extraction captured hole group(s) of [7] (total 7). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] F004 (reconciliation): Stage 10.5 reconciliation: fillet F004 still unresolved after 1 pass(es)
+       decision: unresolved_after_pass_1
+       why: excluded from the build by the completeness gate (missing driving dimension).
+       affects: Re-ran Stage 2.5 resolution (pass 1) with every available requirements/overview-analysis signal reloaded from disk; the result was identical to the previous pass — no further information is available to resolve this without fabricating a value, which this pipeline never does.
+   - [HIGH] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (front, bom_table): The dashed inner rectangle in the front view is not explicitly labeled; it could be misinterpreted as a hidden edge, step, or bend line of the plate itself rather than the outline of the adhesive weatherstripping called out in the BOM (23 IN, item 2). Recommendation: Confirm with the BOM and any additional notes that the dashed rectangle represents the weatherstripping installation outline, not a machined or formed feature of the steel plate; check for a leader line connecting the dashed rectangle to the weatherstripping BOM item if available on the original sheet.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front): The 7 hole locations are dimensioned individually via a rectangular X/Y coordinate scheme (offsets .25, 5.250, 10.500 horizontally and .375, 2.875, 5.875 vertically) rather than a single leader count; visually there appear to be exactly 7 hole circles (4 corners, 2 mid-left/right, and one additional at bottom-right near the .218 DR THRU leader), which matches the '7-HOLES' callout, but the pattern is NOT symmetric (asymmetric hole at bottom right beyond the corner hole) - this could be misread as a symmetric 8-hole pattern if corners are assumed mirrored on both sides. Recommendation: Verify hole count and locations directly against the 7 dimensioned X/Y positions in the front view; do not assume full corner symmetry (e.g., no hole is shown at top-right corner separate from the mid-right and bottom-right holes) - confirm each of the 7 physical hole centers against the coordinate dimensions given.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [LOW] OV003 (overview): Surface Finish note: Weather stripping (sponge rubber with adhesive back, 5/32 THK x 1/2 WIDE) applied along an edge, 23 in length, item 2 in BOM (along one edge of plate (per side view line and balloon 2)).
+       decision: attached to part metadata as a surface finish note
+       why: a note, not part geometry — no build counterpart expected
+       affects: metadata: surface finish
+   - [LOW] OV004 (overview): Gauge thickness noted but material unknown: Side/edge view of plate showing 12 GA (.105 in) thickness (bottom view strip) [gauge 12]. Cannot convert a gauge number to a decimal without the material — not compared to the build.
+       decision: recorded as the part's gauge reference; not reconciled
+       why: a gauge number is ambiguous across materials (no decimal given)
+       affects: metadata: stock gauge
+
+5. BUILD / MACRO FEATURE FAILURES
+   - none
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '156-C-RevE' finished NOT READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\0b791c651230\A091061M\output\156-C-RevE

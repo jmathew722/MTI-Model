@@ -1,0 +1,58 @@
+LEARNING LOOP — 5038-B-RevB
+============================================================
+Run:     2026-07-26 17:01:38
+Status:  READY
+Model:   claude-sonnet-5
+Outputs: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\99b555ed9ce3\A050381E\output\5038-B-RevB
+Fingerprint: 18d7e0029baf98c9
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — READY
+   - No gate failures (run reached READY).
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [LOW] The side view only clearly shows 2 of the 4 tapped holes (front pair), while the front view shows all 4; the side view appears to be a partial/sectional profile rather than a full side elevation, so the other 2 holes are simply out of the cutting plane rather than missing geometry.
+       -> Confirm the side view is a partial section aligned with only the front row of holes; verify hole depth (.75 DP) is consistent for all 4 holes since only 2 are visible in section.
+   - [MEDIUM] No explicit overall plate thickness dimension is given in either view; the .75 DP tapped hole depth implies minimum plate thickness but true thickness is not called out.
+       -> Check for a thickness dimension elsewhere on the sheet or confirm with material/size block; if absent, flag as missing dimension requiring engineering clarification before manufacture.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 1, HIGH 2, MEDIUM 3
+   - [CRITICAL] D007 (dimension): D007 decimal placement AMBIGUOUS among ['3.25', '4.25']; plausibility could not separate them. Kept 4.25 as a best guess and the dependent feature is excluded from the build (Tab-3 assumption) — confirm the value and re-run.
+       decision: resolved value 4.25
+       why: ambiguous multi candidate
+       affects: dimension D007
+   - [HIGH] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front, side): The side view only clearly shows 2 of the 4 tapped holes (front pair), while the front view shows all 4; the side view appears to be a partial/sectional profile rather than a full side elevation, so the other 2 holes are simply out of the cutting plane rather than missing geometry. Recommendation: Confirm the side view is a partial section aligned with only the front row of holes; verify hole depth (.75 DP) is consistent for all 4 holes since only 2 are visible in section.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [HIGH] OV007 (overview): Count shortfall for hole: the overview's callouts total 6, but the build contains 4.
+       decision: build kept its extracted total of 4
+       why: the summed overview callout counts exceed the built total — a group of this feature may be missing (per-group counts that sum to the build total are treated as consistent and NOT flagged)
+       affects: hole total count
+   - [MEDIUM] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (front, side): No explicit overall plate thickness dimension is given in either view; the .75 DP tapped hole depth implies minimum plate thickness but true thickness is not called out. Recommendation: Check for a thickness dimension elsewhere on the sheet or confirm with material/size block; if absent, flag as missing dimension requiring engineering clarification before manufacture.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV005 (overview): The overview POSSIBLY shows 1x chamfer (No chamfers clearly called out or visible, n/a) with no matching feature in the build.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: chamfer feature(s) — verify against the drawing
+   - [MEDIUM] OV006 (overview): The overview POSSIBLY shows 1x fillet (No fillets clearly visible; edges may be sharp per note 'break sharp edges non-functional', n/a) with no matching feature in the build.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: fillet feature(s) — verify against the drawing
+
+5. BUILD / MACRO FEATURE FAILURES
+   - none
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '5038-B-RevB' finished READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: C:\Users\joeka\MTI_Claude\2D-3D-CAD-Test-Generation\webapp\parts\99b555ed9ce3\A050381E\output\5038-B-RevB

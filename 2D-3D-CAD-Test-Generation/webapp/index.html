@@ -377,7 +377,7 @@
   .ovan-body .rg-mini .mark-swatch { width:13px; height:13px; margin-top:2px; }
   .ovan-body .rg-mini ul { margin:0; }
 
-  /* Sheet 4 sub-header: marks this sheet as a browsing/inspection surface
+  /* Sheet 3 sub-header: marks this sheet as a browsing/inspection surface
      (mirrors the drafting-sheet cap treatment used elsewhere). */
   .outputs-head { flex:0 0 auto; display:flex; align-items:center; gap:var(--sp-3);
                   padding:var(--sp-2) var(--sp-4); border-bottom:1px solid var(--line);
@@ -432,7 +432,8 @@
 
   /* ── Empty-state glyph + heading (shared across every "nothing here yet"
      panel — Sheet 1's drawing/model wells, Sheet 2's parts list, Sheet 3's
-     output tabs). Reuses only existing tokens: no new colors, no assets. ── */
+     output tabs, Sheet 4's flag list). Reuses only existing tokens: no new
+     colors, no assets. ── */
   .es { display:flex; flex-direction:column; align-items:center; gap:var(--sp-1); }
   .es-glyph { width:36px; height:36px; border:1px solid var(--line-strong); border-radius:var(--r-lg);
               display:grid; place-items:center; color:var(--ink-4); font:16px/1 var(--mono);
@@ -441,7 +442,7 @@
   .es-hint { color:var(--ink-3); font-size:var(--fs-small); max-width:340px; text-align:center; line-height:1.5; }
   .es-hint b { color:var(--ink-2); }
 
-  /* With the outputs dock moved to Sheet 4, the live console can use the
+  /* With the outputs dock moved to Sheet 3, the live console can use the
      remaining height of the Pipeline sheet. */
   #inline-console { flex:1 1 auto; min-height:0; margin:0; overflow:auto;
                     padding:var(--sp-3) var(--sp-4); border-top:1px solid var(--line);
@@ -631,7 +632,7 @@
   .flags-scroll { flex:1 1 auto; overflow:auto; padding-bottom:var(--sp-3); }
   .flags-summary { padding:var(--sp-3) var(--sp-4) 0; font-size:var(--fs-body); color:var(--ink-3); }
 
-  /* Human Verification (Sheet 3): a flag → one confirmation question + fill-in.
+  /* Human Verification (Sheet 4): a flag → one confirmation question + fill-in.
      Reuses the --sev-* tokens; no new visual language. */
   .verify-wrap { flex:1 1 auto; overflow:auto; padding:var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-3); }
   .vflag { border:1px solid var(--line); border-left:3px solid var(--ink-4); border-radius:var(--r-md);
@@ -816,8 +817,8 @@
 <nav class="tabs" id="tabbar">
   <button class="tab tab-c active" data-tab="intake"><span class="sheet-no">SHEET 1</span>Upload &amp; 3D Model <span class="badge">·</span></button>
   <button class="tab tab-c" data-tab="pipeline"><span class="sheet-no">SHEET 2</span>Pipeline</button>
-  <button class="tab tab-c" data-tab="verify"><span class="sheet-no">SHEET 3</span>Human Verification <span class="badge-c warn" id="verify-tab-count" style="display:none">0</span></button>
-  <button class="tab tab-c" data-tab="outputs"><span class="sheet-no">SHEET 4</span>Run Outputs</button>
+  <button class="tab tab-c" data-tab="outputs"><span class="sheet-no">SHEET 3</span>Run Outputs</button>
+  <button class="tab tab-c" data-tab="verify"><span class="sheet-no">SHEET 4</span>Human Verification <span class="badge-c warn" id="verify-tab-count" style="display:none">0</span></button>
 </nav>
 
 <main>
@@ -1024,35 +1025,7 @@
     </details>
   </section>
 
-  <!-- ── Sheet 4 · Run Outputs (browse every artifact of any completed run) ── -->
-  <!-- ── Sheet 3 · Human Verification ──────────────────────────────────────
-       Each engineering flag from the selected run becomes a concise, LLM-phrased
-       confirmation question with a fill-in box. The operator's answers are
-       compiled into ONE must-meet CORRECTION block and fed back through the
-       specs-first extraction + Stage 2.5 resolution on re-run — clearing the
-       flags at the source instead of shipping assumptions. ──────────────────── -->
-  <section class="panel" id="panel-verify">
-    <div class="outputs-head">
-      <span class="oh-title">HUMAN VERIFICATION</span>
-      <span class="oh-sub">answer a short question per engineering flag — your answers become authoritative corrections that resolve them on re-run</span>
-      <span class="grow"></span>
-      <label class="hint" for="verify-run-select" style="text-transform:none;letter-spacing:0">Select Run</label>
-      <select class="sel-input model-sel" id="verify-run-select" title="Pick a completed run to review its engineering flags">
-        <option value="">no completed runs yet</option>
-      </select>
-      <span class="badge-c warn" id="verify-count" title="Open flags for this run">0</span>
-    </div>
-    <div class="verify-wrap">
-      <div class="empty" id="verify-empty">Select a completed run above to review its engineering flags and confirm the drawing's intent.</div>
-      <div id="verify-list"></div>
-      <div class="verify-actions" id="verify-actions" style="display:none">
-        <button class="btn primary" id="verify-submit" title="Compile your answers into a must-meet correction and re-run the pipeline so the flags resolve">✓ Submit answers &amp; re-run</button>
-        <button class="btn secondary" id="verify-save" title="Append your answers as a correction without re-running now (applied on the next run)">Save answers only</button>
-        <span class="hint" id="verify-status"></span>
-      </div>
-    </div>
-  </section>
-
+  <!-- ── Sheet 3 · Run Outputs (browse every artifact of any completed run) ── -->
   <section class="panel" id="panel-outputs">
     <div class="outputs-head">
       <span class="oh-title">RUN OUTPUTS</span>
@@ -1174,6 +1147,34 @@
       </div>
     </div>
   </section>
+
+  <!-- ── Sheet 4 · Human Verification ──────────────────────────────────────
+       Each engineering flag from the selected run becomes a concise, LLM-phrased
+       confirmation question with a fill-in box. The operator's answers are
+       compiled into ONE must-meet CORRECTION block and fed back through the
+       specs-first extraction + Stage 2.5 resolution on re-run — clearing the
+       flags at the source instead of shipping assumptions. ──────────────────── -->
+  <section class="panel" id="panel-verify">
+    <div class="outputs-head">
+      <span class="oh-title">HUMAN VERIFICATION</span>
+      <span class="oh-sub">answer a short question per engineering flag — your answers become authoritative corrections that resolve them on re-run</span>
+      <span class="grow"></span>
+      <label class="hint" for="verify-run-select" style="text-transform:none;letter-spacing:0">Select Run</label>
+      <select class="sel-input model-sel" id="verify-run-select" title="Pick a completed run to review its engineering flags">
+        <option value="">no completed runs yet</option>
+      </select>
+      <span class="badge-c warn" id="verify-count" title="Open flags for this run">0</span>
+    </div>
+    <div class="verify-wrap">
+      <div class="empty" id="verify-empty">Select a completed run above to review its engineering flags and confirm the drawing's intent.</div>
+      <div id="verify-list"></div>
+      <div class="verify-actions" id="verify-actions" style="display:none">
+        <button class="btn primary" id="verify-submit" title="Compile your answers into a must-meet correction and re-run the pipeline so the flags resolve">✓ Submit answers &amp; re-run</button>
+        <button class="btn secondary" id="verify-save" title="Append your answers as a correction without re-running now (applied on the next run)">Save answers only</button>
+        <span class="hint" id="verify-status"></span>
+      </div>
+    </div>
+  </section>
 </main>
 
 <script src="/pdf.min.js"></script>
@@ -1182,8 +1183,8 @@
 <script src="/vendor/STLLoader.js"></script>
 <script src="/vendor/OrbitControls.js"></script>
 <script>
-// ── Tabs: 4 top-level sheets + a sub-tab dock for run outputs (Sheet 4) ─────
-const TOP_TABS = ['intake', 'pipeline', 'verify', 'outputs'];
+// ── Tabs: 4 top-level sheets + a sub-tab dock for run outputs (Sheet 3) ─────
+const TOP_TABS = ['intake', 'pipeline', 'outputs', 'verify'];
 document.getElementById('tabbar').addEventListener('click', e => {
   const b = e.target.closest('.tab'); if (b) showTab(b.dataset.tab);
 });
@@ -1191,7 +1192,7 @@ document.getElementById('stabbar').addEventListener('click', e => {
   const b = e.target.closest('.stab'); if (b) showSub(b.dataset.tab);
 });
 function showTab(name) {
-  if (!TOP_TABS.includes(name)) { showTab('outputs'); showSub(name); return; } // legacy names → Sheet 4 sub-tab
+  if (!TOP_TABS.includes(name)) { showTab('outputs'); showSub(name); return; } // legacy names → Sheet 3 sub-tab
   document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('main > .panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
   if (name === 'intake') viewer.onShow(); // STL viewer lives on the Upload & 3D Model tab
@@ -1280,7 +1281,7 @@ fetch('/api/status').then(r => r.json()).then(s => {
 }).catch(() => {});
 fetch('/api/session', { method:'POST' }).then(r => r.json()).then(d => { sessionId = d.session; loadAssist(); }).catch(() => {});
 // Load the persistent run history at startup: runs from PRIOR sessions appear
-// in both the Sheet-2 model dropdown and Sheet-4 run dropdown immediately.
+// in both the Sheet-2 model dropdown and Sheet-3 run dropdown immediately.
 window.addEventListener('DOMContentLoaded', () => { refreshRunHistory(); });
 
 // ── Output tab plumbing ──────────────────────────────────────────────────────
@@ -1702,10 +1703,10 @@ function gotoAssist() {
 let partsData = [], selectedPart = null, isRunning = false;
 
 // ── Shared run history: ONE store behind Sheet 2's "Select Model" dropdown
-// and Sheet 4's "Select Run" dropdown, fed by /api/run-history (persistent,
+// and Sheet 3's "Select Run" dropdown, fed by /api/run-history (persistent,
 // disk-backed, cross-session) so the two lists can never disagree. ──────────
 let runHistory = [];
-// Which run's outputs the Sheet-4 dock (and Files-tab links / STL loads)
+// Which run's outputs the Sheet-3 dock (and Files-tab links / STL loads)
 // currently refer to. Defaults to the actively selected part in this session.
 let outputsCtx = null; // {session, part}
 
@@ -1739,7 +1740,7 @@ async function refreshRunHistory(selectKey) {
 }
 function runByKey(key) { return runHistory.find(r => historyKey(r) === key); }
 
-// Sheet 4: switching the run reloads all ten sub-tabs for that run.
+// Sheet 3: switching the run reloads all ten sub-tabs for that run.
 async function syncOutputsToRun(key, opts) {
   const r = runByKey(key);
   if (!r) return;
@@ -1757,7 +1758,7 @@ document.getElementById('run-select').addEventListener('change', e => {
   if (e.target.value) syncOutputsToRun(e.target.value);
 });
 
-// ── Sheet 3 · Human Verification ────────────────────────────────────────────
+// ── Sheet 4 · Human Verification ────────────────────────────────────────────
 // Each engineering flag → a concise confirmation question + a fill-in box; the
 // answers compile into ONE must-meet correction fed back through re-run.
 let verifyCtx = null;   // {session, part}
@@ -1884,7 +1885,7 @@ document.getElementById('model-select').addEventListener('change', e => {
   document.getElementById('viewer-part').textContent = r.part;
   paintOverviewImage(`/api/parts/${r.session}/${encodeURIComponent(r.part)}/overview.jpg?t=${r.epoch || ''}`);
 });
-// Sheet 4: clear EVERY stored run output (both dropdowns empty; parts + the
+// Sheet 3: clear EVERY stored run output (both dropdowns empty; parts + the
 // delivered copies in UI_Output/ and Downloads are kept). Irreversible.
 document.getElementById('clear-runs-btn').addEventListener('click', async () => {
   if (!runHistory.length) return;
@@ -1967,7 +1968,7 @@ async function loadPartOutputs(name) {
   paintOverviewAnalysis(null);
   document.getElementById('stl-empty').style.display = '';
   outputsCtx = { session: sessionId, part: name };
-  // Keep Sheet 4's run selector on the same run when it exists in history.
+  // Keep Sheet 3's run selector on the same run when it exists in history.
   const rs = document.getElementById('run-select'), key = `${sessionId}|${name}`;
   if (rs && [...rs.options].some(o => o.value === key)) rs.value = key;
   let d;
@@ -2650,7 +2651,7 @@ function monitorRun(id, partName) {
         currentRunId = null;
         // refresh the parts list so the "ran" badge appears
         try { const pl = await (await fetch(`/api/parts?session=${sessionId}`)).json(); partsData = pl.parts; renderParts(); } catch {}
-        // The finished run enters the shared history: auto-selected on Sheet 4's
+        // The finished run enters the shared history: auto-selected on Sheet 3's
         // run dropdown and immediately selectable in Sheet 2's model dropdown.
         try { await refreshRunHistory(`${sessionId}|${partName}`); } catch {}
         // refresh outputs once more so delivered paths land in the Files tab
