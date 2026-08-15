@@ -326,6 +326,15 @@ def build_summary(output_dir: Path | str) -> dict:
     assist = _load(assist_p) or {}
     recon = _load(recon_p) or {}
 
+    # The per-feature ledger (REFACTOR_ANALYSIS §1.2) is the ONE reconciliation
+    # of the six back-half artifacts. This view used to do that reconciliation
+    # inline; it now reads the ledger for "what state is this feature in" and
+    # "what did verification measure", and keeps the artifact dicts only for the
+    # presentation detail they carry (flags, values used, datum chains).
+    from pipeline.feature_ledger import build_ledger
+
+    ledger = build_ledger(out)
+
     ran = bool(resolved) or bool(plan) or bool(dispositions)
 
     units = str(resolved.get("units") or plan.get("units") or "")
@@ -378,15 +387,16 @@ def build_summary(output_dir: Path | str) -> dict:
                     break
         basis = _basis_label(basis_src)
 
-        # status from disposition state (falls back to feature build_status)
-        state = (disp or {}).get("state") or (
+        # status from the ledger's disposition state (falls back to the
+        # feature's own build_status when the sequencer never spoke about it)
+        rec = ledger.get(fid)
+        state = (rec.disposition_state if rec else "") or (
             {"build": "BUILT"}.get(str(feat.get("build_status") or "").lower(), ""))
         status_label, status_kind = _STATE_STATUS.get(
             state, ("Built" if state == "" and ran else "—", "ok" if ran else "neutral"))
         # a pending question nudges an otherwise-clean feature to amber, but
         # never softens an already-red (excluded) state.
-        if (fid in pending_by_feat
-                or (disp or {}).get("human_input_state") == "NEEDS_HUMAN_INPUT"):
+        if fid in pending_by_feat or (rec is not None and rec.needs_human_input):
             if status_kind == "ok":
                 status_kind = "warn"
 
@@ -515,11 +525,12 @@ def build_summary(output_dir: Path | str) -> dict:
         # result = disposition ⊕ verification verdict. A step whose feature has
         # no disposition of its own (slot halves, pattern trio) inherits BUILT
         # from its generated status so it doesn't read as perpetually Pending.
-        state = (disp or {}).get("state") or ""
+        rec = ledger.get(fid)
+        state = (rec.disposition_state if rec else "") or ""
         if not state and str(step.get("status") or "").lower() in ("generated", "built", ""):
             state = "BUILT"
         fv = fverify_by_feat.get(fid)
-        verdict = str((fv or {}).get("classification") or (fv or {}).get("status") or "").upper()
+        verdict = (rec.verification_verdict if rec else "").upper()
         result, result_kind = _merge_result(state, verdict, verification_available,
                                              (disp or {}).get("flags") or [])
 

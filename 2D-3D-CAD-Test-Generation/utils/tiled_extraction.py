@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -211,24 +210,28 @@ def make_tiles(width: int, height: int, tile: int = TILE_PX,
                overlap: float = TILE_OVERLAP) -> list[Tile]:
     """Overlapping tile grid over a (width, height) image. Step = tile * (1 -
     overlap); the last tile in each axis is clamped to the edge so full coverage
-    is guaranteed. Coordinates are SHEET (image) pixels."""
-    step = max(1, int(round(tile * (1.0 - overlap))))
-    xs = _starts(width, tile, step)
-    ys = _starts(height, tile, step)
-    tiles = []
-    for r, y0 in enumerate(ys):
-        for c, x0 in enumerate(xs):
-            tiles.append(Tile(r, c, x0, y0, min(x0 + tile, width), min(y0 + tile, height)))
-    return tiles
+    is guaranteed. Coordinates are SHEET (image) pixels.
+
+    The grid itself comes from the shared high-res subsystem
+    (:func:`pipeline.highres_pass.windows_fixed_size`, REFACTOR_ANALYSIS §1.4),
+    which also owns the full-coverage guarantee — the region pass plans its
+    windows with the same code."""
+    from pipeline.highres_pass import (
+        assert_full_coverage,
+        windows_fixed_size,
+    )
+
+    windows = windows_fixed_size(width, height, tile, overlap)
+    assert_full_coverage(windows, width, height)
+    return [Tile(w.row, w.col, w.x0, w.y0, w.x1, w.y1) for w in windows]
 
 
 def _starts(length: int, tile: int, step: int) -> list[int]:
-    if length <= tile:
-        return [0]
-    starts = list(range(0, max(1, length - tile) + 1, step))
-    if starts[-1] != length - tile:
-        starts.append(length - tile)  # clamp last tile to the edge
-    return starts
+    """Deprecated alias — the window-start math lives in
+    :func:`pipeline.highres_pass.window_starts`."""
+    from pipeline.highres_pass import window_starts
+
+    return window_starts(length, tile, step)
 
 
 def crop_tile(image, t: Tile):
@@ -259,31 +262,24 @@ def stitch(tile_dims: list[dict], tol_px: float = 25.0) -> list[dict]:
     entry (records contributing tiles). Anchors agree but values differ -> keep
     BOTH as candidate readings (``value_unclear=True`` + ``possible_values``) for
     the Stage 2.5 resolver's conflicting-readings path. Dims without an anchor
-    are kept as-is (deduped by value+applies_to)."""
+    are kept as-is (deduped by value+applies_to).
+
+    Grouping uses the shared :func:`pipeline.highres_pass.group_by_proximity`
+    (REFACTOR_ANALYSIS §1.4); what to DO with a disagreeing group stays this
+    module's decision (candidates for the resolver, not a human question)."""
+    from pipeline.highres_pass import group_by_proximity, numeric_key
+
     merged: list[dict] = []
     anchored = [d for d in tile_dims if _anchor(d) is not None]
     unanchored = [d for d in tile_dims if _anchor(d) is None]
 
-    used = [False] * len(anchored)
-    for i, d in enumerate(anchored):
-        if used[i]:
-            continue
-        ax, ay = _anchor(d)
-        group = [d]
-        used[i] = True
-        for j in range(i + 1, len(anchored)):
-            if used[j]:
-                continue
-            bx, by = _anchor(anchored[j])
-            if math.hypot(ax - bx, ay - by) <= tol_px:
-                group.append(anchored[j])
-                used[j] = True
-        merged.append(_merge_group(group))
+    for idxs in group_by_proximity(anchored, _anchor, tol_px):
+        merged.append(_merge_group([anchored[i] for i in idxs]))
 
     # Unanchored: dedupe by (applies_to, rounded value).
     seen = set()
     for d in unanchored:
-        key = ((d.get("applies_to") or "").lower(), round(float(d.get("value", 0)), 4))
+        key = ((d.get("applies_to") or "").lower(), numeric_key(d.get("value", 0)))
         if key in seen:
             continue
         seen.add(key)
@@ -292,10 +288,12 @@ def stitch(tile_dims: list[dict], tol_px: float = 25.0) -> list[dict]:
 
 
 def _merge_group(group: list[dict]) -> dict:
+    from pipeline.highres_pass import numeric_key
+
     base = dict(group[0])
     tiles = sorted({t for d in group for t in _tiles_of(d)})
     base["source_tiles"] = tiles
-    values = {round(float(d.get("value", 0)), 4) for d in group if "value" in d}
+    values = {numeric_key(d.get("value", 0)) for d in group if "value" in d}
     if len(values) > 1:
         # Conflicting readings across tiles — hand BOTH to the resolver.
         base["value_unclear"] = True

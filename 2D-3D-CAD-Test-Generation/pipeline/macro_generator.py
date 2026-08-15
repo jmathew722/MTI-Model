@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -2883,12 +2884,21 @@ def _assert_label_payload_agreement(pkg: "MacroPackage") -> None:
                     f"(158-C class). Refusing to generate.")
 
 
+def _csharp_enabled(emit_csharp: Optional[bool]) -> bool:
+    """Whether to emit the C# companion package. Explicit argument wins; ``None``
+    falls back to ``MTI_EMIT_CSHARP`` (1/true/yes/on); default OFF."""
+    if emit_csharp is not None:
+        return bool(emit_csharp)
+    return os.getenv("MTI_EMIT_CSHARP", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def generate_macro_package(
     model: DrawingData,
     raw_extraction: dict[str, Any],
     verification_text: str,
     output_dir: Path | str,
     resolution: Any = None,
+    emit_csharp: Optional[bool] = None,
 ) -> MacroPackage:
     """Generate the complete macro package for a verified drawing.
 
@@ -2903,6 +2913,11 @@ def generate_macro_package(
             ``build_plan.json`` is the fully self-contained schema (drawing +
             meters dims, positions_xy, flags[], edge-selection strategy, and a
             resolution summary). When None, behavior is unchanged from v2.
+        emit_csharp: also emit the ``macros_csharp/`` companion program. OPT-IN
+            (REFACTOR_ANALYSIS §1.7) — ``None`` reads ``MTI_EMIT_CSHARP``, and
+            the default is OFF. The VBA package is the canonical build path;
+            nothing in the pipeline builds from the C# output, so emitting it by
+            default only added a second emitter to keep in lockstep.
 
     Returns:
         A :class:`MacroPackage` describing everything written.
@@ -3357,21 +3372,25 @@ def generate_macro_package(
     # and the engineering review. Skipped silently when no overview exists.
     overview_report = None
     try:
-        from pipeline.overview_macro_validate import run_overview_macro_validation
+        from pipeline.overview_validate import run_overview_macro_validation
 
         overview_report = run_overview_macro_validation(model, pkg)
     except Exception as e:  # advisory stage: never sink a generated package
         log.warning("overview macro validation failed (stage skipped): %s", e)
 
-    # --- C# companion package (additive; VBA stays the canonical build path) ---
+    # --- C# companion package (OPT-IN; VBA stays the canonical build path) ---
     # macros_csharp/ next to macros/: a late-bound COM console program generated
     # from the SAME BuildStep data, self-echo-checked at emission time.
-    try:
-        from pipeline.csharp_macro import generate_csharp_package
+    # Opt-in since 2026-08-15 (REFACTOR_ANALYSIS §1.7): nothing builds from it by
+    # default, and emitting it on every run made every macro_generator change a
+    # two-emitter change. Enable per run with --emit-csharp or MTI_EMIT_CSHARP=1.
+    if _csharp_enabled(emit_csharp):
+        try:
+            from pipeline.csharp_macro import generate_csharp_package
 
-        generate_csharp_package(model, pkg, unit_factor)
-    except Exception as e:  # additive output: never sink the VBA package
-        log.warning("C# macro emission failed (VBA package unaffected): %s", e)
+            generate_csharp_package(model, pkg, unit_factor)
+        except Exception as e:  # additive output: never sink the VBA package
+            log.warning("C# macro emission failed (VBA package unaffected): %s", e)
 
     plan = _build_plan_dict(model, pkg, unit_factor, audit, resolution)
     if overview_report is not None:

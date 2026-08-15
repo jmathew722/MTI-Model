@@ -1896,7 +1896,7 @@ def _callout_count_flags(resolved: dict) -> list[dict]:
     5-vs-6), never the "positions derived from a bolt-circle" case (where the
     count is not independently observable). The flag carries the standard shape
     the engineering review + human_assist queue already consume."""
-    from pipeline.hole_wizard import reconcile_callout_count
+    from pipeline.callout_qty import reconcile_callout_count
 
     flags: list[dict] = []
     for hole in resolved.get("hole_callouts", []) or []:

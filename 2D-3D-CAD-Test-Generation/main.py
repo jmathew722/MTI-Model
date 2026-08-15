@@ -160,15 +160,28 @@ def _print_resolution_summary(resolution) -> None:
 
 
 def is_dwg(path) -> bool:
-    """True if ``path`` is a DWG file (input for the Stage 2.4 cross-check)."""
+    """True if ``path`` is a DWG file (input for the Stage 2.4 cross-check).
+    Delegates to the routing module, which owns the DWG classification."""
     try:
-        return Path(str(path)).suffix.lower() == ".dwg"
+        from pipeline.dwg_routing import is_dwg as _is_dwg
+
+        return _is_dwg(str(path))
     except Exception:
         return False
 
 
 def _dwg_crosscheck_enabled(args) -> bool:
     return not getattr(args, "no_dwg_crosscheck", False)
+
+
+def _dwg_route(path, args):
+    """Which DWG path handles this input, per ``pipeline.dwg_routing`` — the ONE
+    place the vision-vs-native routing rule is written down (docs/DWG_PATHS.md).
+    Reported to the console so a DWG run always states which product it is."""
+    from pipeline.dwg_routing import VISION_PIPELINE, route_for
+
+    return route_for(str(path), entry_point=VISION_PIPELINE,
+                     dwg_crosscheck=_dwg_crosscheck_enabled(args))
 
 
 def _prepare_and_extract(args) -> tuple[dict | None, dict | None]:
@@ -644,7 +657,8 @@ def _run_views_folder(args) -> int:
                                              overview_analysis=overview_analysis,
                                              requirements_file=notes_file,
                                              skip_overview_check=getattr(args, "skip_overview_check", False),
-                                             skip_requirements_check=getattr(args, "skip_requirements_check", False)))
+                                             skip_requirements_check=getattr(args, "skip_requirements_check", False),
+                                             emit_csharp=getattr(args, "emit_csharp", None)))
         except Exception as e:  # one bad part must never sink the rest of the batch
             console.print(f"  [red]Processing failed:[/red] {type(e).__name__}: {e}")
             from pipeline.batch import BatchRow
@@ -785,6 +799,15 @@ def main() -> int:
         "sidecars are always kept as the field->region audit trail). Default all.",
     )
     parser.add_argument(
+        "--emit-csharp",
+        action="store_true",
+        default=None,
+        help="Also emit the macros_csharp/ companion C# console program next to "
+        "macros/. OFF by default: the VBA package is the canonical build path and "
+        "nothing in the pipeline builds from the C# output (set MTI_EMIT_CSHARP=1 "
+        "to enable it for every run).",
+    )
+    parser.add_argument(
         "--no-dwg-crosscheck", action="store_true",
         help="Disable Stage 2.4 DWG native cross-check. By default, when the input "
         "is a DWG, SolidWorks imports it and its EXACT dimension text is used to "
@@ -855,6 +878,10 @@ def main() -> int:
         dwg_src = Path(args.source_file)
     elif is_dwg(args.drawing):
         dwg_src = Path(args.drawing)
+    if dwg_src is not None:
+        # State which of the two DWG products is handling this file, and why.
+        route = _dwg_route(dwg_src, args)
+        console.print(f"  [dim]DWG route: {route.route} — {route.reason}[/dim]")
     if dwg_src is not None and _dwg_crosscheck_enabled(args):
         console.print("[2.4/4] DWG native cross-check (SolidWorks exact dimensions)...")
         from pipeline.dwg_crosscheck import run_dwg_crosscheck
@@ -946,7 +973,8 @@ def main() -> int:
         from pipeline.macro_generator import generate_macro_package
 
         pkg = generate_macro_package(model, raw_extraction, verification_text, output_dir,
-                                     resolution=resolution)
+                                     resolution=resolution,
+                                     emit_csharp=getattr(args, "emit_csharp", None))
         n_macros = sum(1 for s in pkg.steps if s.macro_file.endswith(".vba"))
         lines = [
             f"[green]Macro package complete:[/green] {pkg.root}",
@@ -1036,6 +1064,18 @@ def main() -> int:
                                  f"({pkg.root.name}_assist_queue.json) — best-available values shipped")
             except Exception as e:
                 lines.append(f"  [yellow]Human-assist escalation failed:[/yellow] {type(e).__name__}: {e}")
+
+            # Canonical per-feature ledger (REFACTOR_ANALYSIS §1.2) — the same
+            # artifact the --views-folder path writes, so "what happened to F004?"
+            # is answered identically regardless of entry point.
+            try:
+                from pipeline.feature_ledger import write_ledger
+
+                lp = write_ledger(pkg.root, pkg.root.name)
+                if lp is not None:
+                    lines.append(f"  Per-feature ledger: {lp.name}")
+            except Exception as e:
+                lines.append(f"  [yellow]Feature ledger failed:[/yellow] {type(e).__name__}: {e}")
 
         if pkg.skipped:
             lines.append(

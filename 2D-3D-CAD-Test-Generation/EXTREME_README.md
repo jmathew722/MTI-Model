@@ -4,12 +4,15 @@
 > explains **what every part does, how the data flows, why each decision was made,
 > and how to rebuild it identically and improve it.** It is deliberately exhaustive.
 >
-> Companion to `CLAUDE.md` (the working agent brief) and the README. Where `CLAUDE.md`
-> is written for an assistant mid-task, this file is written for a human (or agent)
-> who wants to understand or reconstruct the whole machine.
+> **This file is CANONICAL** for how the pipeline works (decided 2026-08-15,
+> REFACTOR_ANALYSIS §1.8/§2.5). `CLAUDE.md` used to carry a second hand-maintained
+> copy of the same stage-by-stage narrative; it is now scoped to commands,
+> environment, invariants and a stage INDEX that points here. Where the two
+> disagree, this file wins — and the disagreement is a bug to fix.
 >
-> Last reconciled against the code: 2026-08. Branch context: `MTI_Codex` / `MTI_OCRDWG`
-> (both carry the OpenAI provider and the P0–P4 audit fixes; `main` stays on Anthropic).
+> Last reconciled against the code: 2026-08-15. Branch context: `MTI_Codex` /
+> `MTI_OCRDWG` / `REFRACTOR_UI` (all carry the OpenAI provider and the P0–P4 audit
+> fixes; `main` stays on Anthropic).
 
 ---
 
@@ -1006,11 +1009,85 @@ Its own muted periwinkle-violet UI zone (`--explain*`).
 
 ---
 
+## 13.5 CROSS-CUTTING MODULES (the 2026-08-15 consolidation)
+
+Five modules were added/merged to give one owner to things that previously had
+several. Each resolves a numbered item in `REFACTOR_ANALYSIS.md` (repo root), which
+is the standing audit + action list.
+
+### `pipeline/coordinate_authority.py` — where a feature IS (§1.1)
+Five modules touch position resolution (`hole_resolution`, `resolver`,
+`position_solver`, `coordinate_normalize`, `build_sequencer._feature_xy`). Their
+logic is genuinely different and is NOT merged; what is merged is the **ownership
+story**. This module holds the four ordered phases (vector-vs-vision merge →
+ambiguity resolution → anchor-graph solve → normalize/emit), the strict precedence
+`spec_driven > vector_geometry > anchor_solver > resolved_dimension >
+committed_conservative`, and ONE entry point `resolve_position()` that answers
+"where is this feature and who decided that" with the losing candidates recorded
+(`disagreements()`), never averaged away. `tests/test_coordinate_authority.py`
+asserts the chain end-to-end — the precedence is exactly what silently breaks when
+one of the five is refactored alone.
+
+### `pipeline/feature_ledger.py` — the per-feature history (§1.2)
+Six artifacts tracked feature state in six shapes (`_build_dispositions.json`, its
+duplicate inside `build_plan.json`, `_reconciliation_report.json`,
+`_feature_verification.json`, `_geometric_loop_report.json`, `_assist_queue.json`,
+`_deferred_log.json`). `build_ledger(output_dir)` assembles them into ONE
+append-only, stage-tagged history per feature id (`{stage, status, basis, detail,
+source}`, ordered by `STAGE_ORDER`), written as `<Part>_feature_ledger.json`.
+Deliberately a **view**, so consumers migrate one at a time and are verifiable
+against frozen goldens; `summary_view.py` is the first (its golden fixtures are
+byte-identical through the ledger). Each source file becomes a filtered view or is
+retired once nothing reads it directly.
+
+### `pipeline/retry_ladder.py` — the bounded-retry contract (§1.5)
+Stage 10.5, Stage 10.7 and the deferred-feature queue each had their own cap /
+"made no progress" / oscillation logic. They now share one driver:
+`run_ladder(attempt, cap=3, …)` owns termination only — **cap**, **completion**,
+**oscillation** (a unit that passed before and fails now, checked BEFORE
+completion so a regression is never masked), **no progress** (deterministic work
+cannot get luckier by repeating; opt out for ladders whose passes escalate
+strategy), **exhaustion**, and **error** (recorded, never swallowed). Callers keep
+their domain logic and may consult the policy mid-pass via `LadderContext.regressed`
+— which is how the geometric loop still skips correction work it would throw away.
+`tests/test_retry_ladder.py` is the one place the guarantee is tested.
+
+### `pipeline/highres_pass.py` — the shared second look (§1.4)
+Stage 1.2 (tiled, escalation-triggered) and Stage 2.3 (region, unconditional)
+differ in exactly one design dimension — **trigger policy** — and in the key their
+readings match on. Shared here: `evaluate_trigger(ALWAYS | ON_CONFIDENCE_HEURISTIC
+| NEVER)`, window planning (`windows_fixed_size` / `windows_by_division`) with a
+common `assert_full_coverage` guarantee, and the reconciliation decision core
+(`values_agree`, `rank_confidence`, `reconcile_pair` → AGREED/A_WINS/B_WINS/
+CONFLICT, `group_by_proximity`, `best_by_rank`). What each caller DOES with a
+conflict stays its own (candidate values for the resolver vs. human review).
+`run_region_extraction(..., trigger_policy=ALWAYS)` keeps the unconditional
+default on purpose: a confidently-wrong field never trips a confidence heuristic.
+
+### `pipeline/overview_validate.py` — Stage 11, merged (§1.3)
+`overview_check.py` + `overview_macro_validate.py` are one module with named
+sub-checks: `check_missing_features` (alias `cross_check`) for the overview IMAGE
+vs the build; `check_hole_counts`, `check_correspondences`,
+`check_through_vs_blind`, `check_conflict_carryover`, `check_symmetry_advisory`
+for the Stage 1.5 WORDS vs the macro package. Advisory by default in both halves;
+strict is opt-in. Report artifacts are unchanged.
+
+### `pipeline/dwg_routing.py` — which DWG path (§1.6)
+`route_for(path, entry_point=…)` is the single answer, with the full decision in
+`docs/DWG_PATHS.md`: `dwg_native/` is a permanent second product (entities are
+truth, gate don't resolve), a DWG on the vision path stays there and gains Stage
+2.4's exact dimension text, and neither path silently hands a file to the other.
+
+---
+
 ## 14. WHERE TO IMPROVE (extension points that respect the invariants)
 
 - **Live-verify HoleWizard5** on the target SW2024/locale, nail the Value-slot mapping,
   and promote it to default in `methods_config.py` once it passes Phase A across the
-  golden set (currently opt-in behind `MTI_ENABLE_HOLE_WIZARD`).
+  golden set. It is now QUARANTINED in `pipeline/experimental/` behind
+  `MTI_ENABLE_HOLE_WIZARD` with the exact blocker and revival steps in
+  `pipeline/experimental/README.md` (REFACTOR_ANALYSIS §2.1) — if the live
+  verification is never scheduled, the honest next step is deletion.
 - **Smart sketch dimensioning** (`AddDimension2`) is deliberately opt-in-future — the
   fully-defined gate currently only *observes* under-defined sketches. Verify it live
   before turning it into a fixer.
@@ -1022,7 +1099,12 @@ Its own muted periwinkle-violet UI zone (`--explain*`).
   rather than a third blind retry. `lessons_learned.jsonl` and the `Learning Loop/`
   reports are the raw material.
 - **New providers/models:** add to the `_OpenAIAdapterClient` pattern and `PRICING`;
-  no call site should change.
+  no call site should change. The OpenAI path's real status (adapter-tested, NOT
+  production-verified) and the exact steps to promote or remove it are in
+  `docs/PROVIDER_STATUS.md` (REFACTOR_ANALYSIS §2.2).
+- **C# companion package** is opt-in (`--emit-csharp` / `MTI_EMIT_CSHARP=1`,
+  REFACTOR_ANALYSIS §1.7). The VBA package stays the canonical build path; if you
+  change `macro_generator`, either update `csharp_macro.py` too or leave it off.
 - **Golden discipline:** any intentional macro change goes through
   `$env:UPDATE_GOLDEN=1` with the diff reviewed like code. Never loosen a
   generation-time invariant to make a build pass — fix the upstream value instead.
@@ -1045,5 +1127,8 @@ Its own muted periwinkle-violet UI zone (`--explain*`).
 
 ---
 
-*End of EXTREME README. For the terse working brief see `CLAUDE.md`; for narrative
-onboarding see `README.md`; for per-decision history see the dated files in `docs/`.*
+*End of EXTREME README — the canonical description of this pipeline. For the terse
+working brief (commands, environment, stage index) see `CLAUDE.md`; for the standing
+redundancy/improvement audit see `REFACTOR_ANALYSIS.md` at the repo root; for
+narrative onboarding see `README.md`; for per-decision history see the dated files in
+`docs/`.*

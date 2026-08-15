@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from pipeline.macro_generator import BuildStep, generate_macro_package
-from pipeline.overview_macro_validate import (
+from pipeline.overview_validate import (
     OverviewMacroValidationError,
     assert_overview_macro_validation,
     run_overview_macro_validation,

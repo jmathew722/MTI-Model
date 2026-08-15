@@ -1,7 +1,7 @@
 """Tests for pipeline.overview_check — the final overview cross-check pass."""
 from pathlib import Path
 
-from pipeline.overview_check import (
+from pipeline.overview_validate import (
     _build_inventory,
     cross_check,
     run_overview_check,
@@ -135,7 +135,7 @@ class TestRunWrapper:
 
         img = tmp_path / "ov.png"
         Image.new("RGB", (200, 200), "white").save(img)
-        import pipeline.overview_check as oc
+        import pipeline.overview_validate as oc
 
         monkeypatch.setattr(oc, "extract_overview_features",
                             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("api down")))

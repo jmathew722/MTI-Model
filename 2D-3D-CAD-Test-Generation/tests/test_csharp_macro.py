@@ -4,6 +4,9 @@ The macros_csharp/ companion package is generated from the SAME BuildStep data
 as the VBA, deterministic, self-echo-checked, and never touches macros/ (the
 golden snapshot stays byte-identical). No SolidWorks needed — these tests only
 inspect the emitted source text.
+
+Emission is OPT-IN since 2026-08-15 (REFACTOR_ANALYSIS §1.7) — every test here
+asks for it explicitly, and :class:`TestOptIn` pins the default OFF.
 """
 import pytest
 
@@ -23,7 +26,8 @@ def built(tmp_path):
     data = _golden_drawing()
     model, report = run_verification(data)
     assert report.ok, str(report)
-    pkg = generate_macro_package(model, data, format_verification_report(model, report), tmp_path)
+    pkg = generate_macro_package(model, data, format_verification_report(model, report),
+                                 tmp_path, emit_csharp=True)
     return model, pkg
 
 
@@ -162,7 +166,8 @@ class TestHoleTypeParity:
     def _build(self, data, tmp_path):
         model, report = run_verification(data)
         assert report.ok, str(report)
-        return generate_macro_package(model, data, format_verification_report(model, report), tmp_path)
+        return generate_macro_package(model, data, format_verification_report(model, report),
+                                      tmp_path, emit_csharp=True)
 
     def test_counterbore_routes_to_manual_not_a_plain_cut(self, tmp_path):
         pkg = self._build(self._cbore_drawing(), tmp_path)
@@ -179,3 +184,47 @@ class TestHoleTypeParity:
         program = (pkg.root / "macros_csharp" / "Program.cs").read_text(encoding="utf-8")
         assert "sw.CreateCircle(2.5, 1, 0.25)" in program
         assert "sw.CutFeature(" in program
+
+
+class TestOptIn:
+    """C# emission is opt-in (REFACTOR_ANALYSIS §1.7): the VBA package is the
+    canonical build path, nothing builds from the C# output, and emitting it on
+    every run made every macro_generator change a two-emitter change."""
+
+    def _generate(self, tmp_path, **kw):
+        data = _golden_drawing()
+        model, report = run_verification(data)
+        return generate_macro_package(model, data,
+                                      format_verification_report(model, report),
+                                      tmp_path, **kw)
+
+    def test_not_emitted_by_default(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("MTI_EMIT_CSHARP", raising=False)
+        pkg = self._generate(tmp_path)
+        assert not (pkg.root / "macros_csharp").exists()
+        # the VBA package is untouched by the opt-out
+        assert (pkg.root / "macros").is_dir()
+        assert any(pkg.root.glob("macros/*.vba"))
+
+    def test_flag_enables_it(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("MTI_EMIT_CSHARP", raising=False)
+        pkg = self._generate(tmp_path, emit_csharp=True)
+        assert (pkg.root / "macros_csharp" / "Program.cs").is_file()
+
+    def test_env_var_enables_it(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("MTI_EMIT_CSHARP", "1")
+        pkg = self._generate(tmp_path)
+        assert (pkg.root / "macros_csharp" / "Program.cs").is_file()
+
+    def test_explicit_false_beats_the_env_var(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("MTI_EMIT_CSHARP", "1")
+        pkg = self._generate(tmp_path, emit_csharp=False)
+        assert not (pkg.root / "macros_csharp").exists()
+
+    def test_cli_exposes_the_flag(self):
+        import subprocess
+        import sys
+
+        out = subprocess.run([sys.executable, "main.py", "--help"],
+                             capture_output=True, text=True, timeout=180)
+        assert "--emit-csharp" in out.stdout

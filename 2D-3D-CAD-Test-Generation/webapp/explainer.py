@@ -294,6 +294,11 @@ ARTIFACT_REGISTRY: list[tuple[str, str, list[str]]] = [
      ["*_feature_verification.json", "*_geometric_loop_report.json"]),
     ("reconciliation", "Stage 10.5 · Reconciliation",
      ["*_reconciliation_report.json"]),
+    # The canonical per-feature history (REFACTOR_ANALYSIS §1.2): one stage-tagged
+    # record per feature, assembled from every back-half artifact. Listed after the
+    # stages it summarizes so a "what happened to F004?" question reaches it.
+    ("feature_ledger", "Cross-stage · Per-feature ledger",
+     ["*_feature_ledger.json"]),
     ("review", "Stage 12 · Engineering review",
      ["*_engineering_review.txt"]),
     ("export", "Export · Delivery manifest",
@@ -326,7 +331,10 @@ ROUTING: list[tuple[tuple[str, ...], tuple[str, ...]]] = [
     (("slot", "notch", "u-notch", "fillet", "rectangle", "corner"),
      ("build_plan", "resolution")),
     (("reconcil", "checklist", "missing", "unresolved", "dropped"),
-     ("reconciliation", "build_plan")),
+     ("reconciliation", "build_plan", "feature_ledger")),
+    (("what happened to", "history", "ledger", "end state", "end-state", "timeline",
+      "status of"),
+     ("feature_ledger", "build_plan", "feature_verify")),
     (("verify", "verification", "measured", "watertight", "volume"),
      ("feature_verify", "constraint_verify", "verification")),
     (("hole", "diameter", "bolt", "pattern", "bore", "counterbore", "tap"),

@@ -12,11 +12,13 @@ mismatch"). Handles the common forms:
     "R.531 TYP"                     -> qualifier TYP (count defaults to 1)
 
 Public entry points: :func:`parse_quantity`, :func:`is_typ`,
-:func:`classify_callout`, :func:`is_hole_callout`.
+:func:`classify_callout`, :func:`is_hole_callout`,
+:func:`reconcile_callout_count`.
 """
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 # Quantity patterns, tried in order; the first match wins. Each captures the
 # integer count in group 1. Ordered specific -> general.
@@ -96,3 +98,48 @@ def is_hole_callout(text: str) -> bool:
     A radius callout (fillet/corner-round) returns False and must NOT be counted
     against holes."""
     return classify_callout(text) in _HOLE_KINDS
+
+
+# ---------------------------------------------------------------------------- #
+# Callout-vs-count reconciliation (Phase 3d — the A050211E 5-vs-6 conflict)
+# Moved here 2026-08-15 from pipeline/hole_wizard.py (REFACTOR_ANALYSIS §2.1)
+# when that module's unverified HoleWizard5 COM path was quarantined: this is
+# live resolver logic about callout QUANTITY language, which is what this
+# module owns.
+# ---------------------------------------------------------------------------- #
+
+def reconcile_callout_count(callout_qty: Optional[int],
+                            countable_instances: Optional[int],
+                            feature_id: str,
+                            *, source: str = "callout_count") -> Optional[dict]:
+    """Compare a callout MULTIPLIER against the COUNTABLE pattern instances.
+
+    When both are known and DISAGREE (the A050211E flange: a ``(6)`` callout but 5
+    countable holes) this is a **build-blocking conflict**: return a CRITICAL flag
+    object shaped for the pipeline's existing escalation surface (engineering
+    review + ``human_assist`` queue) — NEVER silently pick a number. Returns
+    ``None`` when they agree or either side is unknown (nothing to escalate).
+    """
+    if not callout_qty or not countable_instances:
+        return None
+    if int(callout_qty) == int(countable_instances):
+        return None
+    return {
+        "feature_id": feature_id,
+        "severity": "CRITICAL",
+        "source": source,
+        "kind": "callout_vs_count_mismatch",
+        "callout_qty": int(callout_qty),
+        "countable_instances": int(countable_instances),
+        "human_note": (
+            f"{feature_id}: callout multiplier ({int(callout_qty)}) does not match "
+            f"the {int(countable_instances)} countable hole positions on the sheet. "
+            "Build-blocking — resolve which count is correct before drilling."
+        ),
+        "gate_question": (
+            f"How many holes does {feature_id} have — the callout says "
+            f"{int(callout_qty)} but {int(countable_instances)} are dimensioned/visible?"
+        ),
+        "candidates": [int(callout_qty), int(countable_instances)],
+        "blocking": True,
+    }

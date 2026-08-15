@@ -13,7 +13,7 @@ Covers the self-contained, deterministically-verifiable fixes:
 """
 import pytest
 
-from pipeline.overview_check import cross_check
+from pipeline.overview_validate import cross_check
 from pipeline.resolver import resolve_extraction
 
 

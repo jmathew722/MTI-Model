@@ -151,27 +151,19 @@ def compute_regions(master_w_px: int, master_h_px: int,
     if master_w_px <= 0 or master_h_px <= 0:
         raise ValueError(f"master dims must be positive, got {master_w_px}x{master_h_px}")
 
-    cols = max(1, math.ceil(master_w_px / target_edge_px))
-    rows = max(1, math.ceil(master_h_px / target_edge_px))
-    tile_w = master_w_px / cols
-    tile_h = master_h_px / rows
-    overlap_x = tile_w * overlap_frac
-    overlap_y = tile_h * overlap_frac
+    # The grid itself is planned by the shared high-res subsystem
+    # (REFACTOR_ANALYSIS §1.4) — the same code the tiled zoom pass plans with,
+    # so the two second-look systems cannot drift apart on coverage. The region
+    # ID scheme and the overlap floor above stay this module's contract.
+    from pipeline.highres_pass import assert_full_coverage, windows_by_division
 
-    regions: list[Region] = []
-    idx = 0
-    for r in range(rows):
-        for c in range(cols):
-            idx += 1
-            x0 = max(0, c * tile_w - overlap_x)
-            y0 = max(0, r * tile_h - overlap_y)
-            x1 = min(master_w_px, (c + 1) * tile_w + overlap_x)
-            y1 = min(master_h_px, (r + 1) * tile_h + overlap_y)
-            regions.append(Region(
-                id=f"p{page:02d}_r{idx:02d}",
-                x0_master_px=int(x0), y0_master_px=int(y0),
-                x1_master_px=int(math.ceil(x1)), y1_master_px=int(math.ceil(y1))))
-    return regions
+    windows = windows_by_division(master_w_px, master_h_px, target_edge_px,
+                                  overlap_frac)
+    assert_full_coverage(windows, master_w_px, master_h_px)
+    return [Region(id=f"p{page:02d}_r{idx:02d}",
+                   x0_master_px=w.x0, y0_master_px=w.y0,
+                   x1_master_px=w.x1, y1_master_px=w.y1)
+            for idx, w in enumerate(windows, start=1)]
 
 
 def coverage_gap_pixels(master_w_px: int, master_h_px: int,

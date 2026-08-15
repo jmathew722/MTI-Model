@@ -47,8 +47,53 @@ log = get_logger()
 # --------------------------------------------------------------------------- #
 # Provider selection
 # --------------------------------------------------------------------------- #
+ANTHROPIC = "anthropic"
+OPENAI = "openai"
+
+# Verification status per provider (REFACTOR_ANALYSIS §2.2). "production" = this
+# path is exercised by real drawing runs; "adapter_tested" = the translation
+# layer is unit-tested at every call site (tests/test_ai_provider.py) but the
+# path has NOT been run end-to-end against production drawings. Anything less
+# than "production" is stated out loud at selection time rather than implied by
+# the absence of a warning — a passing test suite with no live traffic behind it
+# is a false sense of coverage, which is exactly what §2.2 flagged.
+PROVIDER_STATUS: dict[str, str] = {
+    ANTHROPIC: "production",
+    OPENAI: "adapter_tested",
+}
+
+_status_warned: set[str] = set()
+
+
 def get_provider() -> str:
-    return (os.getenv("AI_PROVIDER") or "anthropic").strip().lower()
+    return (os.getenv("AI_PROVIDER") or ANTHROPIC).strip().lower()
+
+
+def provider_status(provider: Optional[str] = None) -> dict[str, Any]:
+    """The selected provider, its default model, and how well-verified it is.
+
+    Read by :func:`build_client` (which warns ONCE per process on a
+    less-than-production path) and by the docs/UI so the status is discoverable
+    without reading this file.
+    """
+    prov = (provider or get_provider())
+    known = prov in PROVIDER_STATUS
+    status = PROVIDER_STATUS.get(prov, "unknown")
+    return {
+        "provider": prov if known else ANTHROPIC,
+        "requested": prov,
+        "recognized": known,
+        "status": status,
+        "model": default_model(),
+        "production_verified": status == "production",
+        "note": (
+            "" if status == "production" else
+            f"AI_PROVIDER={prov}: the adapter is unit-tested at every call site but "
+            "has NOT been verified end-to-end against production drawings. Extraction "
+            "quality, tool-call reliability and cost accounting on this path are "
+            "unproven — see docs/PROVIDER_STATUS.md."
+        ),
+    }
 
 
 def default_model() -> str:
@@ -88,7 +133,11 @@ def is_nonretryable_status(e: Exception) -> bool:
 # --------------------------------------------------------------------------- #
 def build_client(max_retries: int):
     """The provider-appropriate client, exposing ``.messages.create(...)``."""
-    if get_provider() == "openai":
+    status = provider_status()
+    if not status["production_verified"] and status["requested"] not in _status_warned:
+        _status_warned.add(status["requested"])
+        log.warning("%s", status["note"])
+    if get_provider() == OPENAI:
         return _build_openai_client(max_retries)
     import anthropic  # imported here so this module loads without the package
 

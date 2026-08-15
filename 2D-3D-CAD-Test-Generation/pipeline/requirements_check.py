@@ -116,7 +116,7 @@ def _tokens(s: str) -> set[str]:
 def check_requirements(reqs: list[dict[str, Any]], extraction: dict) -> list[dict[str, Any]]:
     """Grade each requirement against the (resolved) extraction. Mutates and
     returns ``reqs`` with ``status`` and ``note`` filled per requirement."""
-    from pipeline.overview_check import _build_inventory
+    from pipeline.overview_validate import _build_inventory
 
     inv = _build_inventory(extraction)
     dim_values = _dimension_values(extraction)

@@ -322,3 +322,166 @@ def test_usage_log_pricing_includes_gpt_5_6_tiers():
     usage = {"input_tokens": 1000, "output_tokens": 1000, "cache_read_input_tokens": 0}
     cost = estimate_cost(usage, "gpt-5.6")
     assert cost == pytest.approx(0.005 + 0.030)
+
+
+# --------------------------------------------------------------------------- #
+# Provider status (REFACTOR_ANALYSIS §2.2)
+# --------------------------------------------------------------------------- #
+def test_anthropic_is_the_production_verified_path(monkeypatch):
+    from pipeline.ai_provider import provider_status
+
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    st = provider_status()
+    assert st["provider"] == "anthropic"
+    assert st["production_verified"] is True
+    assert st["note"] == ""
+
+
+def test_openai_status_states_it_is_not_production_verified(monkeypatch):
+    from pipeline.ai_provider import provider_status
+
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    st = provider_status()
+    assert st["provider"] == "openai"
+    assert st["status"] == "adapter_tested"
+    assert st["production_verified"] is False
+    assert "NOT been verified end-to-end" in st["note"]
+    assert st["model"] == "gpt-5.6"
+
+
+def test_unknown_provider_is_reported_as_unrecognized(monkeypatch):
+    from pipeline.ai_provider import provider_status
+
+    monkeypatch.setenv("AI_PROVIDER", "mistral")
+    st = provider_status()
+    assert st["recognized"] is False
+    assert st["provider"] == "anthropic"      # falls back, as build_client does
+
+
+def test_selecting_an_unverified_provider_warns_once(monkeypatch, caplog):
+    import pipeline.ai_provider as ap
+
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(ap, "_status_warned", set())
+    monkeypatch.setattr(ap, "_build_openai_client", lambda n: "CLIENT")
+    with caplog.at_level("WARNING"):
+        assert ap.build_client(1) == "CLIENT"
+        assert ap.build_client(1) == "CLIENT"
+    warnings = [r for r in caplog.records if "NOT been verified" in r.getMessage()]
+    assert len(warnings) == 1          # once per process, not once per call
+
+
+# --------------------------------------------------------------------------- #
+# Call-site contract: every LLM stage must go through the shared client contract
+# so AI_PROVIDER genuinely swaps the model without touching any call site.
+# These drive the REAL stage functions through the OpenAI adapter over a fake
+# OpenAI SDK client — no network, no key, no Anthropic import.
+# --------------------------------------------------------------------------- #
+class _FakeCompletions:
+    """Records the OpenAI-shaped request and returns a canned tool call."""
+
+    def __init__(self, tool_name, payload):
+        self.tool_name, self.payload = tool_name, payload
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return _fake_openai_response(
+            tool_calls=[_fake_tool_call("call_1", self.tool_name, self.payload)])
+
+
+class _FakeOpenAI:
+    def __init__(self, tool_name, payload):
+        self.completions = _FakeCompletions(tool_name, payload)
+        self.chat = SimpleNamespace(completions=self.completions)
+
+
+def _adapter_for(tool_name, payload):
+    from pipeline.ai_provider import _OpenAIAdapterClient
+
+    raw = _FakeOpenAI(tool_name, payload)
+    return _OpenAIAdapterClient(raw), raw.completions
+
+
+class TestCallSiteContract:
+    """REFACTOR_ANALYSIS §2.2: the adapter is only worth its abstraction cost if
+    every stage really does share ONE client contract. Each test runs a real
+    stage entry point against the adapter and asserts a well-formed OpenAI
+    request came out the other side."""
+
+    def test_overview_analysis_stage_runs_through_the_adapter(self, monkeypatch):
+        """Stage 1.5 — the holistic overview pass."""
+        import pipeline.extractor as ex
+        import pipeline.overview_analysis as oa
+
+        client, completions = _adapter_for(oa.TOOL_NAME, {
+            "part_number": "T-1", "views_detected": [],
+            "cross_view_correspondences": [], "cross_view_conflicts": [],
+            "global_notes": [], "overall_shape_summary": "flat plate",
+        })
+        monkeypatch.setattr(ex, "_build_client", lambda *a, **k: client)
+        out = oa.analyze_overview("aGVsbG8=", model="gpt-5.6", cache_dir=None)
+        assert out is not None and out["overall_shape_summary"] == "flat plate"
+        req = completions.calls[0]
+        assert req["model"] == "gpt-5.6"
+        assert req["tools"][0]["function"]["name"] == oa.TOOL_NAME
+        assert req["reasoning_effort"] == "none"
+
+    def test_overview_image_check_runs_through_the_adapter(self, monkeypatch):
+        from pipeline import overview_validate as ov
+
+        client, completions = _adapter_for(
+            ov.OVERVIEW_TOOL_NAME,
+            {"features": [{"kind": "hole", "count": 4, "description": "mounting"}]})
+        import pipeline.extractor as ex
+
+        monkeypatch.setattr(ex, "_build_client", lambda *a, **k: client)
+        data = ov.extract_overview_features("aGVsbG8=", media_type="image/png",
+                                            model="gpt-5.6", cache_dir=None)
+        assert data["features"][0]["kind"] == "hole"
+        req = completions.calls[0]
+        # Anthropic-shaped call translated correctly for OpenAI:
+        assert req["model"] == "gpt-5.6"
+        assert req["max_completion_tokens"] == ov.MAX_TOKENS
+        assert req["messages"][0]["role"] == "system"
+        assert req["tools"][0]["function"]["name"] == ov.OVERVIEW_TOOL_NAME
+        assert req["tool_choice"]["function"]["name"] == ov.OVERVIEW_TOOL_NAME
+        # forced tool call on a reasoning model => reasoning_effort disabled
+        assert req["reasoning_effort"] == "none"
+        # the image really crossed as a data URL
+        parts = req["messages"][1]["content"]
+        assert any(p["type"] == "image_url" for p in parts)
+
+    def test_must_meet_spec_parsing_runs_through_the_adapter(self, monkeypatch):
+        """Stage 2.6 — operator must-meet spec parsing."""
+        import pipeline.extractor as ex
+        from pipeline import must_meet as mm
+
+        client, completions = _adapter_for(mm._MM_TOOL_NAME, {"constraints": [
+            {"id": "MM-001", "kind": "hole_count", "text": "4 holes required"}]})
+        monkeypatch.setattr(ex, "_build_client", lambda *a, **k: client)
+        got = mm.parse_spec_text_llm("Part must have 4 holes.")
+        assert got and got[0]["id"] == "MM-001"
+        req = completions.calls[0]
+        assert req["tools"][0]["function"]["name"] == mm._MM_TOOL_NAME
+        assert req["tool_choice"]["function"]["name"] == mm._MM_TOOL_NAME
+
+    def test_usage_translation_feeds_the_shared_cost_ledger(self):
+        """Whatever the provider, usage must reach usage_log in Anthropic's
+        accounting convention — otherwise cost reporting silently lies."""
+        from pipeline.ai_provider import _translate_response
+        from pipeline.usage_log import estimate_cost
+
+        resp = _translate_response(_fake_openai_response(
+            content="ok", finish_reason="stop", prompt_tokens=1000,
+            completion_tokens=200, cached_tokens=400))
+        assert resp.usage.input_tokens == 600
+        assert resp.usage.cache_read_input_tokens == 400
+        assert resp.usage.cache_creation_input_tokens == 0
+        cost = estimate_cost({
+            "input_tokens": resp.usage.input_tokens,
+            "output_tokens": resp.usage.output_tokens,
+            "cache_read_input_tokens": resp.usage.cache_read_input_tokens,
+            "cache_creation_input_tokens": 0}, "gpt-5.6")
+        assert cost > 0

@@ -33,12 +33,23 @@ from __future__ import annotations
 import base64
 import io
 import json
-import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from pipeline.highres_pass import (
+    AGREED,
+    ALWAYS,
+    A_WINS,
+    B_WINS,
+    CONFLICT,
+    best_by_rank,
+    evaluate_trigger,
+    rank_confidence,
+    reconcile_pair,
+)
+from pipeline.highres_pass import values_agree as _hp_values_agree
 from pipeline.image_coordinates import (
     DEFAULT_OVERLAP_FRAC,
     DEFAULT_TARGET_EDGE_PX,
@@ -309,14 +320,10 @@ def run_region_pass(master: MasterRaster, regions: list[Region], overview: dict,
 # --------------------------------------------------------------------------- #
 # Stage E — merge every field; account for every overview field or HALT
 # --------------------------------------------------------------------------- #
-def _values_agree(a: Any, b: Any, rel_tol: float = 1e-3) -> bool:
-    if a is None or b is None:
-        return a is b
-    try:
-        fa, fb = float(a), float(b)
-        return math.isclose(fa, fb, rel_tol=rel_tol, abs_tol=1e-6)
-    except (TypeError, ValueError):
-        return str(a).strip().lower() == str(b).strip().lower()
+# The value-comparison and winner rules are the shared ones in
+# pipeline.highres_pass (REFACTOR_ANALYSIS §1.4) — the same decisions the tiled
+# zoom pass makes. Only what to DO with each outcome is this module's own.
+_values_agree = _hp_values_agree
 
 
 def _best_conf(*confs: str) -> str:
@@ -356,15 +363,11 @@ def merge_fields(overview_fields: list[dict], region_fields: list[dict],
     an unaccounted field slip into the build plan)."""
     out = MergeOutcome()
     # Best region reading per field_path (highest confidence wins the slot).
-    region_by_path: dict[str, dict] = {}
-    for r in region_fields:
-        fp = r.get("field_path")
-        if not fp:
-            continue
-        cur = region_by_path.get(fp)
-        if cur is None or _CONF_RANK.get(str(r.get("confidence")).upper(), 0) > \
-                _CONF_RANK.get(str(cur.get("confidence")).upper(), 0):
-            region_by_path[fp] = r
+    region_by_path: dict[str, dict] = best_by_rank(
+        region_fields,
+        key_of=lambda r: r.get("field_path"),
+        rank_of=lambda r: rank_confidence(r.get("confidence")),
+    )
     ov_by_path = {o["field_path"]: o for o in overview_fields if o.get("field_path")}
 
     for fp, ov in ov_by_path.items():
@@ -388,19 +391,24 @@ def merge_fields(overview_fields: list[dict], region_fields: list[dict],
             continue
         entry.update(region_id=rg.get("region_id"), region_value=rg.get("value"),
                      region_confidence=rg.get("confidence"))
-        ov_c = _CONF_RANK.get(str(ov.get("confidence")).upper(), 0)
-        rg_c = _CONF_RANK.get(str(rg.get("confidence")).upper(), 0)
-        if _values_agree(ov.get("value"), rg.get("value")):
+        verdict = reconcile_pair(
+            ov.get("value"), rg.get("value"),
+            a_rank=rank_confidence(ov.get("confidence")),
+            b_rank=rank_confidence(rg.get("confidence")),
+        )
+        if verdict == AGREED:
             entry.update(resolution=R_AGREED, final_value=ov.get("value"))
             out.resolved[fp] = ov.get("value")
-        elif rg_c > ov_c:
+        elif verdict == B_WINS:
             entry.update(resolution=R_REGION_OVERRIDE, final_value=rg.get("value"))
             out.resolved[fp] = rg.get("value")
-        elif ov_c > rg_c:
+        elif verdict == A_WINS:
             entry.update(resolution=R_OVERVIEW_KEPT, final_value=ov.get("value"))
             out.resolved[fp] = ov.get("value")
         else:
-            # Equal confidence disagreement (incl. both HIGH): genuine conflict.
+            # Equal confidence disagreement (incl. both HIGH): genuine conflict
+            # (highres_pass.CONFLICT) — never auto-tie-broken, always reviewed.
+            assert verdict == CONFLICT
             entry.update(resolution=R_CONFLICT, final_value=None)
             out.review_queue.append({
                 "field_path": fp, "reason": R_CONFLICT,
@@ -524,6 +532,8 @@ class RegionExtractionResult:
     master: MasterRaster
     sent: Optional[SentCopy]
     merge_log_path: Optional[Path]
+    trigger: Optional[dict] = None      # the trigger decision that let this run
+    skipped: bool = False               # True when the policy declined to fire
 
 
 def run_region_extraction(source_path: Path, overview: dict, out_dir: Path, part: str,
@@ -534,12 +544,31 @@ def run_region_extraction(source_path: Path, overview: dict, out_dir: Path, part
                           keep_regions: str = "all", dpi: int = MASTER_DPI,
                           lessons_path: Optional[Path] = None,
                           usage_out: Optional[dict] = None,
-                          overlay: bool = False) -> RegionExtractionResult:
-    """Run the full unconditional region pass on one page and reconcile it with
-    the overview extraction. ``extract_fn`` defaults to the real field-level
-    region extractor (:func:`default_region_extract_fn`); inject a fake for
-    tests. Returns the merged outcome + artifacts (also written to ``out_dir``).
+                          overlay: bool = False,
+                          trigger_policy: str = ALWAYS) -> RegionExtractionResult:
+    """Run the region pass on one page and reconcile it with the overview
+    extraction. ``extract_fn`` defaults to the real field-level region extractor
+    (:func:`default_region_extract_fn`); inject a fake for tests. Returns the
+    merged outcome + artifacts (also written to ``out_dir``).
+
+    ``trigger_policy`` is the pluggable policy from
+    :mod:`pipeline.highres_pass` (REFACTOR_ANALYSIS §1.4) and defaults to
+    ``ALWAYS`` — the unconditional design is deliberate and unchanged: a
+    confidently-wrong field never trips a confidence heuristic, so gating this
+    pass on confidence would reintroduce the silent-skip failure it exists to
+    prevent. ``ON_CONFIDENCE_HEURISTIC`` (the escalation policy the tiled zoom
+    pass uses) and ``NEVER`` are available for callers that want cost over
+    coverage; a declined pass returns a result with ``skipped=True`` and the
+    reasons recorded, never a silent no-op.
     """
+    decision = evaluate_trigger(trigger_policy, extraction=overview)
+    if not decision.fire:
+        log.info("region pass skipped by trigger policy %s: %s",
+                 decision.policy, "; ".join(decision.reasons))
+        master = render_master(source_path, page, out_dir, part, dpi=dpi)
+        return RegionExtractionResult(
+            merge=MergeOutcome(), regions=[], api_calls=0, master=master,
+            sent=None, merge_log_path=None, trigger=decision.as_dict(), skipped=True)
     if extract_fn is None:
         extract_fn = default_region_extract_fn(model=None, cache_dir=out_dir /
                                                ".extraction_cache", usage_out=usage_out)
@@ -557,7 +586,8 @@ def run_region_extraction(source_path: Path, overview: dict, out_dir: Path, part
     if overlay:
         write_overlay(master, regions, out_dir / f"{part}_page{master.page:02d}_overlay.png")
     return RegionExtractionResult(merge=merge, regions=regions, api_calls=rp.api_calls,
-                                  master=master, sent=sent, merge_log_path=merge_log_path)
+                                  master=master, sent=sent, merge_log_path=merge_log_path,
+                                  trigger=decision.as_dict())
 
 
 # --------------------------------------------------------------------------- #

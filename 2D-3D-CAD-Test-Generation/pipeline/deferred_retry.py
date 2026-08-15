@@ -127,6 +127,9 @@ class DeferredItem:
 @dataclass
 class DeferredQueue:
     items: list[DeferredItem] = field(default_factory=list)
+    # How the shared retry ladder ended (stop class + per-pass ledger). Populated
+    # by run_retry_passes; written into _deferred_log.json for the audit trail.
+    ladder: dict[str, Any] = field(default_factory=dict)
 
     def add(self, feature_id: str, feature_type: str, error_text: str) -> DeferredItem:
         item = DeferredItem(feature_id, feature_type, error_text)
@@ -143,6 +146,8 @@ class DeferredQueue:
                    "recovered": sum(1 for i in self.items if i.recovered),
                    "open": len(self.open_items()),
                    "items": [i.as_dict() for i in self.items]}
+        if self.ladder:
+            payload["retry_ladder"] = self.ladder
         path = Path(part_dir) / DEFERRED_LOG
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return path
@@ -160,11 +165,20 @@ def run_retry_passes(queue: DeferredQueue,
     ``ctx`` — the new information that makes iteration converge. Each pass tries
     the next un-tried strategy for each still-open item; an item with no strategy
     left (only 'clarify' remains) stops trying and goes to the clarification gate.
-    Never retries the identical strategy twice."""
-    for pass_num in range(2, 2 + max(0, cap)):
+    Never retries the identical strategy twice.
+
+    The cap / progress / stop-loudly policy is the shared one in
+    :mod:`pipeline.retry_ladder` (REFACTOR_ANALYSIS §1.5). This ladder opts OUT
+    of ``stop_on_no_progress`` because its passes ESCALATE STRATEGY — a pass that
+    recovers nothing still leaves a genuinely different thing to try next — so it
+    stops on exhaustion (no untried strategy anywhere) instead. Retries start at
+    pass 2: pass 1 was the original in-build attempt."""
+    from pipeline.retry_ladder import PassResult, run_ladder
+
+    def _attempt(pass_num: int) -> PassResult:
         open_items = queue.open_items()
         if not open_items:
-            break
+            return PassResult(done=True, detail="every deferred feature recovered")
         ctx = {}
         if topology_ctx is not None:
             try:
@@ -172,6 +186,7 @@ def run_retry_passes(queue: DeferredQueue,
             except Exception as e:
                 log.warning("topology context capture failed: %s", e)
         progressed = False
+        tried: list[str] = []
         for item in open_items:
             strategy = item.next_strategy()
             if strategy is None or strategy == "clarify":
@@ -182,14 +197,25 @@ def run_retry_passes(queue: DeferredQueue,
                 recovered, detail = False, f"retry raised: {type(e).__name__}: {e}"
             item.attempts.append(Attempt(pass_num, strategy,
                                          "recovered" if recovered else "failed", detail))
+            tried.append(f"{item.feature_id}:{strategy}")
             if recovered:
                 item.recovered = True
                 progressed = True
                 log.info("  recovered deferred %s on pass %d via %s", item.feature_id,
                          pass_num, strategy)
-        if not progressed and all(i.next_strategy() in (None, "clarify")
-                                  for i in queue.open_items()):
-            break  # nothing left to try -> stop (deterministic, no thrash)
+        exhausted = all(i.next_strategy() in (None, "clarify")
+                        for i in queue.open_items())
+        return PassResult(progressed=progressed, exhausted=exhausted,
+                          entry={"attempted": tried,
+                                 "open_after": len(queue.open_items())})
+
+    outcome = run_ladder(_attempt, cap=max(0, cap), first_pass=2,
+                         name="deferred-feature", stop_on_oscillation=False,
+                         stop_on_no_progress=False,
+                         reasons={"exhausted": "no untried strategy remains — the "
+                                               "still-open features go to the "
+                                               "clarification gate"})
+    queue.ladder = outcome.as_dict()
     return queue
 
 

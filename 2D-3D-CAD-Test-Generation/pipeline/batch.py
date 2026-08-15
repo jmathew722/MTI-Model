@@ -249,7 +249,8 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
                          requirements_file: Optional[Path] = None,
                          skip_overview_check: bool = False,
                          skip_requirements_check: bool = False,
-                         human_answers: Optional[dict] = None) -> BatchRow:
+                         human_answers: Optional[dict] = None,
+                         emit_csharp: Optional[bool] = None) -> BatchRow:
     """Verify + (unless blocked) generate macros for one already-loaded extraction.
 
     By default the Stage 2.5 resolver runs first, so an ambiguous/under-dimensioned
@@ -466,7 +467,7 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
     try:
         print("[STAGE] Building macros", flush=True)
         pkg = generate_macro_package(model, raw_extraction, verification_text, output_dir,
-                                     resolution=resolution)
+                                     resolution=resolution, emit_csharp=emit_csharp)
     except MacroGenerationError as e:
         return BatchRow(source, part, "ERROR", **scores, n_macros=0, n_needs_review=0,
                         n_skipped=0, detail=str(e)[:300])
@@ -624,7 +625,7 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
     overview_items: list = []
     overview_note = "skipped: --skip-overview-check"
     if not skip_overview_check:
-        from pipeline.overview_check import run_overview_check
+        from pipeline.overview_validate import run_overview_check
 
         usage_o: dict = {}
         overview_items, overview_note = run_overview_check(
@@ -730,6 +731,19 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
     status = "READY" if not gate_reasons else "NOT READY"
     if gate_reasons:
         detail = ("; ".join(gate_reasons) + (f"; {detail}" if detail else ""))[:300]
+
+    # Canonical per-feature ledger (REFACTOR_ANALYSIS §1.2): ONE stage-tagged
+    # history per feature, assembled from the artifacts every back-half stage
+    # already wrote. Written last so it sees them all; a pure view, so failing to
+    # write it can never cost the run its outputs.
+    try:
+        from pipeline.feature_ledger import write_ledger
+
+        ledger_path = write_ledger(part_dir, safe)
+        if ledger_path is not None:
+            print(f"[LEDGER] Per-feature history written to {ledger_path.name}", flush=True)
+    except Exception as e:
+        log.warning("Feature ledger hook failed (non-fatal): %s", e)
 
     # Iterative learning loop: capture every failure/flag from this run into the
     # repo's Learning Loop/ folder as a paste-ready brief for a later code-fix

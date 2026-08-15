@@ -62,6 +62,13 @@ from pipeline.build_sequencer import (
     STATE_EXCLUDED,
     sequence_build_order,
 )
+from pipeline.retry_ladder import (
+    STOP_ERROR,
+    STOP_OSCILLATION,
+    LadderContext,
+    PassResult,
+    run_ladder,
+)
 from pipeline.schema import DrawingData, FeatureType
 
 log = logging.getLogger(__name__)
@@ -452,8 +459,10 @@ def reconcile_part(
 
     cur_resolution, cur_model = resolution, model
 
-    while unresolved and passes_used < max_passes:
-        passes_used += 1
+    def _pass(pass_num: int) -> "PassResult":
+        """One re-resolution pass. Returns the shared ladder's verdict; the
+        cap/progress/stop-loudly policy itself lives in pipeline.retry_ladder."""
+        nonlocal unresolved, confirmed_built, cur_resolution, cur_model
         fresh_requirements = _reload_requirements(part_dir, fallback=requirements)
         fresh_overview = _reload_overview_analysis(part_dir, fallback=overview_analysis)
 
@@ -466,16 +475,15 @@ def reconcile_part(
             new_model, report = run_verification(new_resolution.clean_extraction)
         except Exception as e:  # the loop must never crash a run
             log.warning("reconciliation pass %d: re-resolution failed (%s) — stopping loop.",
-                       passes_used, e)
-            break
+                       pass_num, e)
+            return PassResult(error=f"re-resolution failed: {type(e).__name__}: {e}")
         if new_model is None:
             log.warning("reconciliation pass %d: re-resolved extraction failed schema "
-                       "validation — stopping loop.", passes_used)
-            break
+                       "validation — stopping loop.", pass_num)
+            return PassResult(error="re-resolved extraction failed schema validation")
 
         new_seq = sequence_build_order(new_model, new_resolution)
         new_dispositions = new_seq.disposition_table
-        new_build_plan = dict(build_plan)  # instance counts recomputed only via steps below
         new_unresolved = diff_checklist(checklist, new_dispositions, build_plan)
         new_unresolved += slot_checks(raw_extraction, build_plan)
 
@@ -483,43 +491,49 @@ def reconcile_part(
         if not fixed_ids:
             for item in unresolved:
                 item.resolution_attempted = (
-                    f"Re-ran Stage 2.5 resolution (pass {passes_used}) with every available "
+                    f"Re-ran Stage 2.5 resolution (pass {pass_num}) with every available "
                     "requirements/overview-analysis signal reloaded from disk; the result was "
                     "identical to the previous pass — no further information is available to "
                     "resolve this without fabricating a value, which this pipeline never does.")
-                item.status = f"unresolved_after_pass_{passes_used}"
-            log.info("reconciliation pass %d made no progress — stopping (deterministic resolver, "
-                     "no new signal available).", passes_used)
-            break
+                item.status = f"unresolved_after_pass_{pass_num}"
+            return PassResult(progressed=False, entry={"recovered": []}, detail=(
+                f"reconciliation pass {pass_num} made no progress — stopping "
+                "(deterministic resolver, no new signal available)"))
 
         try:
             _splice_recovered_features(
                 model=new_model, resolution=new_resolution, raw_extraction=raw_extraction,
                 verification_text=verification_text, part_dir=part_dir,
-                feature_ids=sorted(fixed_ids), pass_num=passes_used,
+                feature_ids=sorted(fixed_ids), pass_num=pass_num,
             )
             splices.extend(sorted(fixed_ids))
         except Exception as e:  # a failed splice must not lose the run or hide the recovery
             log.warning("reconciliation pass %d: splice failed (%s) — recording the recovery "
-                       "as still unresolved.", passes_used, e)
-            new_unresolved = unresolved  # revert — nothing was actually applied on disk
-            for item in new_unresolved:
+                       "as still unresolved.", pass_num, e)
+            for item in unresolved:  # revert — nothing was actually applied on disk
                 item.resolution_attempted = (
-                    f"Re-resolution recovered this feature on pass {passes_used}, but splicing "
+                    f"Re-resolution recovered this feature on pass {pass_num}, but splicing "
                     f"it into build_plan.json/macros failed ({type(e).__name__}: {e}).")
-                item.status = f"splice_failed_pass_{passes_used}"
-            break
+                item.status = f"splice_failed_pass_{pass_num}"
+            return PassResult(error=f"splice failed: {type(e).__name__}: {e}")
 
         for item in unresolved:
             if item.feature_id in fixed_ids:
                 item.resolution_attempted = (
-                    f"Re-ran Stage 2.5 resolution (pass {passes_used}) with the fullest available "
+                    f"Re-ran Stage 2.5 resolution (pass {pass_num}) with the fullest available "
                     "context; the feature is now built and spliced into build_plan.json/macros/.")
-                item.status = f"resolved_on_pass_{passes_used}"
+                item.status = f"resolved_on_pass_{pass_num}"
 
         cur_resolution, cur_model = new_resolution, new_model
         unresolved = new_unresolved
         confirmed_built = len(checklist) - len(unresolved)
+        return PassResult(progressed=True, done=not unresolved,
+                          entry={"recovered": sorted(fixed_ids),
+                                 "unresolved_after": len(unresolved)})
+
+    if unresolved:
+        ladder = run_ladder(_pass, cap=max(0, max_passes), name="reconciliation")
+        passes_used = ladder.passes_used
 
     final_status = "READY" if not unresolved else "READY_WITH_OPEN_ITEMS"
     result = ReconciliationResult(
@@ -744,23 +758,25 @@ def geometric_correction_loop(
     all-features-OK (READY); the iteration cap; no applicable correction for the
     remaining mismatches; or OSCILLATION — a previously-PASS feature regressing —
     which stops immediately rather than thrash. Every iteration appends a
-    structured entry to ``lessons_learned.jsonl``."""
+    structured entry to ``lessons_learned.jsonl``.
+
+    The cap / progress / oscillation policy is the shared contract in
+    :mod:`pipeline.retry_ladder` (REFACTOR_ANALYSIS §1.5) — this function keeps
+    only the geometry-specific work of one iteration."""
     if verify_fn is None:
         from pipeline.feature_verify import verify_features as verify_fn  # noqa: N806
 
     result = GeometricLoopResult(part=part, iterations_used=0,
                                  final_status="READY_WITH_OPEN_ITEMS")
     plan = copy.deepcopy(build_plan)
-    prev_ok_ids: set[str] = set()
 
-    for it in range(1, max_iterations + 1):
-        result.iterations_used = it
+    def _iteration(it: int, ctx: LadderContext) -> PassResult:
+        nonlocal plan
         try:
             stl_path = build_fn(plan, part_dir, it)
         except Exception as e:
-            result.stopped_reason = f"build failed on iteration {it}: {type(e).__name__}: {e}"
-            log.warning("geometric loop: %s", result.stopped_reason)
-            break
+            return PassResult(
+                error=f"build failed on iteration {it}: {type(e).__name__}: {e}")
 
         verification = verify_fn(Path(stl_path), plan, Path(part_dir),
                                  resolved_extraction=resolved_extraction, part="",
@@ -779,25 +795,25 @@ def geometric_correction_loop(
                             "class": m.get("classification")} for m in mismatches],
             "extras": len(extras),
         }
-
-        # Oscillation: a feature that PASSED before now fails.
-        regressed = [fid for fid in prev_ok_ids if fid not in ok_ids and fid is not None]
+        # Oscillation — a feature that PASSED before now fails. The rule lives in
+        # the ladder; it is consulted HERE, before any correction work, because
+        # everything after this point would be thrown away by the stop.
+        ok_for_ladder = {fid for fid in ok_ids if fid is not None}
+        regressed = ctx.regressed(ok_for_ladder)
         if regressed:
             ledger_entry["oscillation"] = regressed
             result.iteration_ledger.append(ledger_entry)
-            result.stopped_reason = (f"oscillation — feature(s) {regressed} regressed after a "
-                                     "correction; stopped to avoid thrashing")
             result.unresolved = ledger_entry["mismatches"]
             _log_iteration(lessons_path, part, it, [], "oscillation_stop")
-            break
+            return PassResult(regressed=regressed, ok_ids=ok_for_ladder)
 
         if not mismatches and not extras:
             result.final_status = "READY"
-            result.stopped_reason = "all features verified within tolerance"
             ledger_entry["result"] = "all_pass"
             result.iteration_ledger.append(ledger_entry)
             _log_iteration(lessons_path, part, it, [], "all_pass")
-            break
+            return PassResult(done=True, ok_ids=ok_for_ladder,
+                              detail="all features verified within tolerance")
 
         transform, corrections = plan_corrections(verification, plan)
         ledger_entry["corrections"] = [c.as_dict() for c in corrections]
@@ -814,23 +830,30 @@ def geometric_correction_loop(
             ledger_entry["transform"] = transform
 
         # Any correction that actually changes the plan counts as progress; a
-        # loop that can only "flag" makes no progress and stops (deterministic,
-        # like reconcile_part) rather than burning the iteration cap blindly.
+        # loop that can only "flag" makes no progress and the ladder stops it
+        # (deterministic, like reconcile_part) rather than burning the cap.
         if not applied_any and all(c.action in ("flag",) for c in corrections):
             result.iteration_ledger.append(ledger_entry)
-            result.stopped_reason = ("no applicable geometric correction — remaining mismatches "
-                                     "need human review (never fabricated to force a pass)")
             result.unresolved = ledger_entry["mismatches"] + [
                 {"feature_id": e.get("feature_id"), "class": "EXTRA"} for e in extras]
             _log_iteration(lessons_path, part, it, corrections, "no_progress_stop")
-            break
+            return PassResult(
+                progressed=False, ok_ids=ok_for_ladder,
+                detail="no applicable geometric correction — remaining mismatches "
+                       "need human review (never fabricated to force a pass)")
 
-        prev_ok_ids = ok_ids
         result.iteration_ledger.append(ledger_entry)
         _log_iteration(lessons_path, part, it, corrections,
                        "corrected" if applied_any else "reemit_only")
-    else:
-        result.stopped_reason = f"iteration cap ({max_iterations}) reached"
+        return PassResult(progressed=True, ok_ids=ok_for_ladder)
+
+    ladder = run_ladder(
+        _iteration, cap=max_iterations, name="geometric-correction",
+        reasons={STOP_ERROR: "{error}",
+                 STOP_OSCILLATION: "oscillation — feature(s) {regressed} regressed "
+                                   "after a correction; stopped to avoid thrashing"})
+    result.iterations_used = ladder.passes_used
+    result.stopped_reason = ladder.stopped_reason
 
     if result.final_status != "READY" and not result.unresolved and result.iteration_ledger:
         result.unresolved = result.iteration_ledger[-1].get("mismatches", [])

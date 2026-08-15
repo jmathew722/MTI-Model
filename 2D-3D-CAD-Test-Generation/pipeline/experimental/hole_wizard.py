@@ -40,7 +40,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
-from pipeline import hole_wizard_constants as hwc
+from pipeline.experimental import hole_wizard_constants as hwc
 from pipeline.coordinate_normalize import Bounds, to_meters, validate_bounds
 from pipeline.schema import HoleType
 
@@ -213,46 +213,11 @@ def plan_wizard_hole(h, *, through_all: bool, depth_m: Optional[float],
     )
 
 
-# ---------------------------------------------------------------------------- #
-# Callout-vs-count reconciliation (Phase 3d — the A050211E 5-vs-6 conflict)
-# ---------------------------------------------------------------------------- #
-
-
-def reconcile_callout_count(callout_qty: Optional[int],
-                            countable_instances: Optional[int],
-                            feature_id: str,
-                            *, source: str = "hole_wizard") -> Optional[dict]:
-    """Compare a callout MULTIPLIER against the COUNTABLE pattern instances.
-
-    When both are known and DISAGREE (the A050211E flange: a ``(6)`` callout but 5
-    countable holes) this is a **build-blocking conflict**: return a CRITICAL flag
-    object shaped for the pipeline's existing escalation surface (engineering
-    review + ``human_assist`` queue) — NEVER silently pick a number. Returns
-    ``None`` when they agree or either side is unknown (nothing to escalate).
-    """
-    if not callout_qty or not countable_instances:
-        return None
-    if int(callout_qty) == int(countable_instances):
-        return None
-    return {
-        "feature_id": feature_id,
-        "severity": "CRITICAL",
-        "source": source,
-        "kind": "callout_vs_count_mismatch",
-        "callout_qty": int(callout_qty),
-        "countable_instances": int(countable_instances),
-        "human_note": (
-            f"{feature_id}: callout multiplier ({int(callout_qty)}) does not match "
-            f"the {int(countable_instances)} countable hole positions on the sheet. "
-            "Build-blocking — resolve which count is correct before drilling."
-        ),
-        "gate_question": (
-            f"How many holes does {feature_id} have — the callout says "
-            f"{int(callout_qty)} but {int(countable_instances)} are dimensioned/visible?"
-        ),
-        "candidates": [int(callout_qty), int(countable_instances)],
-        "blocking": True,
-    }
+# Callout-vs-count reconciliation moved OUT of this module (2026-08-15,
+# REFACTOR_ANALYSIS §2.1): it is live pipeline logic used by the Stage 2.5
+# resolver and has nothing to do with the unverified HoleWizard5 COM path
+# quarantined here. It now lives in pipeline/callout_qty.py.
+from pipeline.callout_qty import reconcile_callout_count  # noqa: F401  (re-export)
 
 
 # ---------------------------------------------------------------------------- #

@@ -13,7 +13,7 @@ import json
 import pytest
 
 from pipeline.callout_qty import is_typ, parse_quantity
-from pipeline.overview_check import cross_check
+from pipeline.overview_validate import cross_check
 from pipeline.resolver import resolve_extraction
 
 

@@ -9,8 +9,8 @@ import math
 
 import pytest
 
-from pipeline import hole_wizard as hw
-from pipeline import hole_wizard_constants as hwc
+from pipeline.experimental import hole_wizard as hw
+from pipeline.experimental import hole_wizard_constants as hwc
 from pipeline.coordinate_normalize import INCH_TO_M
 from pipeline.resolver import resolve_extraction
 from pipeline.schema import DrawingData, HoleCallout

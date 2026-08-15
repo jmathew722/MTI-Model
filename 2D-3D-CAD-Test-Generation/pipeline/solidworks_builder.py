@@ -731,7 +731,7 @@ def _try_hole_wizard(sw_doc, model, feature: Feature, h, centers_m: list[tuple[f
     ``coordinate_normalize``. This function stays as the call site
     ``build_hole`` already uses; the real builder lives in the module.
     """
-    from pipeline import hole_wizard
+    from pipeline.experimental import hole_wizard
 
     return hole_wizard.build_wizard_hole(
         sw_doc, model, feature, h, centers_m,
