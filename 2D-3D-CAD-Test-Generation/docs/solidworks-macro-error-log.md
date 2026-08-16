@@ -208,3 +208,27 @@ here.
 **Fix:** none needed for a boss — but do NOT generalise it: the COM **cut** path
 does require the sketch closed and selected (E014). Boss and cut are not
 symmetric. Close the sketch in both cases so one rule covers both.
+
+
+### E020 — an all-edges fillet is a silent no-op, not a partial result
+**Symptom:** `FeatureFillet3` with 44 edges selected on a finished bracket
+returned without raising and changed the volume by exactly zero
+(5.83808 -> 5.83808 in^3).
+**Cause:** if any selected edge cannot accept the radius, the whole feature
+fails — SolidWorks does not fillet the edges that would have worked.
+**Fix:** fillet edge-by-edge (or in small verified groups) and record the skips,
+as reference doc 10 advises. Always compare the volume before and after: the
+return value does not distinguish "filleted everything" from "did nothing". The
+pipeline's deferred-retry queue already treats a failed fillet as deferrable
+rather than fatal, which is the right shape for this.
+
+### E021 — IFeatureManager.InsertFeatureShell is not exposed under late binding
+**Symptom:** `AttributeError: <unknown>.InsertFeatureShell`; `hasattr` finds
+neither `InsertFeatureShell` nor `InsertFeatureShell2` on the FeatureManager.
+**Cause:** unknown — the method is documented for this interface but does not
+resolve through dynamic dispatch on this install (compare E018, where a member
+existed but needed a different access form; here it is absent entirely).
+**Fix:** none found. Shell is untested on this machine. If a drawing needs a
+shell, treat it as an unsupported feature kind and escalate rather than emitting
+a call that will raise. Try the raw-dispid Invoke form first (it rescued
+`IFace2.GetSurface`) before concluding the API is unavailable.

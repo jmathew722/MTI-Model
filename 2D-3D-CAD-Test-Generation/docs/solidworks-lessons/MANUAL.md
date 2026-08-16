@@ -242,3 +242,7 @@ the return:
    will not reject an ambiguous axis (E016).
 10. After a pattern or mirror, count the resulting instances. Both fail silently
     (E017), and a wrong `Mark` produces `None`, not an error.
+11. Fillet edge-by-edge, never all-edges-at-once: one incompatible edge makes the
+    whole feature a silent no-op (E020). Compare volume before and after.
+12. Prefer a reference plane over face hunting — verified identical to sketching
+    on a standard plane, and deterministic.

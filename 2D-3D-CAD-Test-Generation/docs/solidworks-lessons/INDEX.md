@@ -10,6 +10,7 @@ documentation. Lab notebook: `experiments/solidworks_practice/`.
 | [01_com_access_forms.md](01_com_access_forms.md) | Late binding exposes members as method, property, or raw-Invoke-only — per member; plus the enum values that differ from the obvious guess. |
 | [02_cut_and_hole_placement.md](02_cut_and_hole_placement.md) | The verified cut recipe, and measured hole/edge-notch placement on all four edges of one block. |
 | [03_revolve_patterns_mirror_shell.md](03_revolve_patterns_mirror_shell.md) | Revolve verified (360°/270°, +second body); circular pattern RESOLVED with the Mark answer; two centerlines do not fail a revolve. |
+| [05_multifeature_part_and_validation.md](05_multifeature_part_and_validation.md) | Tier 4: a bracket built in plan order, graded PASS by `pipeline.validation`, and the hole audit catching a 2x diameter. |
 | [04_deliberate_failures.md](04_deliberate_failures.md) | Tier 5, 5/5: what a unit slip, an open sketch, an oversized fillet, a detached boss and a stale name actually do. |
 
 ## What was measured
@@ -30,9 +31,13 @@ documentation. Lab notebook: `experiments/solidworks_practice/`.
   correct-vs-wrong **Mark comparison is measured**: Mark 4 → +3 instances,
   Mark 1 → `None` and nothing, neither raising.
 * Tier 5 complete: **5/5** deliberate failures reproduced and characterised.
+* Tier 4 complete: a multi-feature bracket (base -> boss on a reference plane
+  -> notch -> 4 holes -> fillets last), graded **PASS** by the real
+  `pipeline.validation` scorecard, with the hole audit **catching** a
+  deliberately doubled hole diameter.
 
 ## New entries added to the error ledger
-E012–E019 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md).
+E012–E021 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md).
 **Every one of the six fails silently** — a feature object comes back, or `None`
 comes back with no exception, and the model reports clean. That is the single
 most important pattern this lab established: on this API, "it did not throw" is

@@ -1,0 +1,67 @@
+[
+  {
+    "step": "8.1 base plate 5.0 x 3.0 x 0.375",
+    "ok": true,
+    "detail": "bbox [5.0, 3.0, 0.375]"
+  },
+  {
+    "step": "8.2 reference plane offset 0.375",
+    "ok": true,
+    "detail": "selected_front=True name='plane_top' "
+  },
+  {
+    "step": "8.3 boss sketched on the REFERENCE plane",
+    "ok": true,
+    "detail": "bbox [5.0, 3.0, 0.625] vol 6.1875 bodies 1"
+  },
+  {
+    "step": "8.4 right-edge notch (0.5 x 1.0)",
+    "ok": true,
+    "detail": "vol 6.00375"
+  },
+  {
+    "step": "8.5 four mounting holes",
+    "ok": true,
+    "detail": "4 face(s) at d0.375: [(0.625, 0.625), (4.375, 0.625), (0.625, 2.375), (4.375, 2.375)]"
+  },
+  {
+    "step": "8.6 fillet R.0625 (last)",
+    "ok": false,
+    "detail": "44 edges; vol 5.83808 -> 5.83808 "
+  },
+  {
+    "step": "8.7 pipeline.validation scorecard",
+    "ok": true,
+    "detail": "verdict=PASS solid=PASS volume_ratio=PASS"
+  },
+  {
+    "step": "   layer solid_body",
+    "ok": true,
+    "detail": "one watertight solid body"
+  },
+  {
+    "step": "   layer volume_ratio",
+    "ok": true,
+    "detail": "solid fills 62.3% of its bounding box"
+  },
+  {
+    "step": "   layer com_symmetry",
+    "ok": true,
+    "detail": "the drawing declares no symmetry to check against"
+  },
+  {
+    "step": "8.8 hole audit catches a 2x diameter",
+    "ok": true,
+    "detail": "expected all d0.375; found off-spec: [(2.5, 1.5, 0.75)]"
+  },
+  {
+    "step": "8.9 linear pattern (retry)",
+    "ok": false,
+    "detail": "edge_sel=True seed_sel=True faces 5->5 "
+  },
+  {
+    "step": "8.10 shell (retry, largest planar face)",
+    "ok": false,
+    "detail": "members=[] target=found AttributeError: <unknown>.InsertFeatureShell"
+  }
+]
