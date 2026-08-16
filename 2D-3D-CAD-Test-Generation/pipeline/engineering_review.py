@@ -33,6 +33,7 @@ Public entry points: :func:`build_review_items`, :func:`format_review`,
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Optional
 
@@ -251,3 +252,105 @@ def write_review(part_dir: Path, part: str, items: list[dict[str, Any]],
     path = part_dir / f"{part}_engineering_review.txt"
     path.write_text(format_review(part, items, resolution), encoding="utf-8")
     return path
+
+
+# --------------------------------------------------------------------------- #
+# Delivery report (reference doc 09) — ONE document the human acts on
+# --------------------------------------------------------------------------- #
+# Doc 09's shape, exactly: result summary -> assumptions ranked LOWEST CONFIDENCE
+# FIRST -> unresolved failures -> one compact ask. This is pure assembly over the
+# validation scorecard, the assist queue and the review items — it measures
+# nothing new and makes no judgement the pipeline has not already made. The
+# severity-ranked engineering review stays as the detailed surface; this is the
+# one-page cover sheet.
+_DELIVERY_SUFFIX = "_delivery_report.txt"
+
+
+def _confidence_word(value: float) -> str:
+    if value >= 0.85:
+        return "HIGH"
+    if value >= 0.6:
+        return "MED"
+    return "LOW"
+
+
+def format_delivery_report(part: str, scorecard: dict[str, Any],
+                           items: list[dict[str, Any]],
+                           artifacts: Optional[dict[str, str]] = None) -> str:
+    """The doc-09 delivery report as text."""
+    lines: list[str] = []
+    verdict = str(scorecard.get("overall") or "UNKNOWN")
+    lines.append(f"DELIVERY REPORT — {part}")
+    lines.append("=" * 60)
+    lines.append("")
+
+    # 1. Result summary
+    lines.append(f"1. RESULT: {verdict}")
+    for name, path in sorted((artifacts or {}).items()):
+        lines.append(f"   {name}: {path}")
+    for layer in (scorecard.get("layers") or []):
+        if layer.get("status") == "SKIPPED":
+            continue
+        mark = "OK  " if layer.get("status") == "PASS" else "FAIL"
+        lines.append(f"   [{mark}] {layer.get('name')}: {layer.get('detail')}")
+    lines.append("")
+
+    # 2. Assumptions — lowest confidence first (doc 09's explicit ordering)
+    # Sorted HERE, not trusted from the caller: doc 09's ordering is part of the
+    # report's contract, and a caller that forgets to sort would silently bury
+    # the least certain item at the bottom.
+    assumptions = sorted(scorecard.get("assumptions") or [],
+                         key=lambda a: float(a.get("confidence") or 0.0))
+    lines.append(f"2. ASSUMPTIONS TO REVIEW ({len(assumptions)}) — lowest confidence first")
+    if not assumptions:
+        lines.append("   None: every value was read from the drawing.")
+    for i, a in enumerate(assumptions, 1):
+        conf = _confidence_word(float(a.get("confidence") or 0.0))
+        aid = a.get("id") or "-"
+        lines.append(f"   A{i} [{conf}] {aid}: {a.get('what')}")
+        lines.append(f"        basis: {a.get('basis')}")
+        if a.get("default_if_unanswered"):
+            lines.append(f"        ships as: {a['default_if_unanswered']}")
+    lines.append("")
+
+    # 3. Unresolved failures
+    blocking = [it for it in items if str(it.get("severity")) == "CRITICAL"]
+    lines.append(f"3. UNRESOLVED ({len(blocking)})")
+    if not blocking:
+        lines.append("   None.")
+    for it in blocking[:12]:
+        lines.append(f"   [{it.get('id')}] {it.get('what')}")
+        if it.get("decision"):
+            lines.append(f"        shipped as: {it['decision']}")
+    lines.append("")
+
+    # 4. Exactly one ask
+    lines.append("4. THE ASK")
+    if assumptions:
+        lines.append("   Reply 'approved' to finalize, or correct any item by ID")
+        lines.append("   (e.g. 'A1: inches, A3: offset 2mm left') and it will be rebuilt")
+        lines.append("   from the corrected plan. Unanswered items are treated as accepted.")
+    else:
+        lines.append("   Reply 'approved' to finalize. Nothing needs a decision.")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_delivery_report(part_dir: Path, part: str,
+                          scorecard: Optional[dict[str, Any]] = None,
+                          items: Optional[list[dict[str, Any]]] = None,
+                          artifacts: Optional[dict[str, str]] = None) -> Optional[Path]:
+    """Write ``<part>_delivery_report.txt``. Never raises — a report that fails
+    to render must not cost a run its outputs."""
+    part_dir = Path(part_dir)
+    try:
+        if scorecard is None:
+            sc_path = part_dir / "validation.json"
+            scorecard = (json.loads(sc_path.read_text(encoding="utf-8"))
+                         if sc_path.is_file() else {})
+        path = part_dir / f"{part}{_DELIVERY_SUFFIX}"
+        path.write_text(
+            format_delivery_report(part, scorecard or {}, items or [], artifacts),
+            encoding="utf-8")
+        return path
+    except Exception:
+        return None

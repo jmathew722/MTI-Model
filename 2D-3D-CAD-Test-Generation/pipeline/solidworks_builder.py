@@ -185,6 +185,81 @@ def _ensure_sw_constants() -> Optional[int]:
     return None
 
 
+# --------------------------------------------------------------------------- #
+# COM stability (reference doc 02 §Rule 8 / doc 10 §environment)
+# --------------------------------------------------------------------------- #
+# SolidWorks rejects calls while it is busy (rebuilding, or a modal dialog is
+# up) with the RPC "server call retry later / call was rejected" HRESULT family.
+# The documented remedy is an OLE IMessageFilter; from late-bound Python the
+# equivalent — and far simpler — remedy is to retry the call with backoff, which
+# is what the message filter does on the caller's behalf anyway.
+_COM_BUSY_HRESULTS = frozenset({
+    -2147417846,   # RPC_E_SERVERCALL_RETRYLATER
+    -2147418111,   # RPC_E_CALL_REJECTED
+    -2147417843,   # RPC_E_SERVERCALL_REJECTED
+})
+COM_RETRY_ATTEMPTS = 4
+COM_RETRY_BACKOFF_S = 0.25
+
+
+def _is_com_busy(exc: Exception) -> bool:
+    """Whether this exception is SolidWorks saying "busy, try again"."""
+    for attr in ("hresult", "winerror", "errno"):
+        code = getattr(exc, attr, None)
+        if isinstance(code, int) and code in _COM_BUSY_HRESULTS:
+            return True
+    args = getattr(exc, "args", ()) or ()
+    if args and isinstance(args[0], int) and args[0] in _COM_BUSY_HRESULTS:
+        return True
+    text = str(exc).lower()
+    return ("call was rejected by callee" in text
+            or "server is busy" in text
+            or "retrylater" in text.replace("_", ""))
+
+
+def com_retry(fn, *args, attempts: int = COM_RETRY_ATTEMPTS,
+              backoff: float = COM_RETRY_BACKOFF_S, what: str = "", **kwargs):
+    """Call ``fn`` retrying only the SolidWorks-is-busy HRESULTs, with backoff.
+
+    Deliberately narrow: any other exception propagates untouched on the first
+    attempt. A blanket retry would paper over the real failures this pipeline
+    works hard to surface — being busy is the one condition where the identical
+    call IS the right next move (contrast the deferred-retry ladder, where every
+    attempt must change something).
+    """
+    delay = backoff
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            if attempt >= attempts or not _is_com_busy(e):
+                raise
+            log.warning("SolidWorks busy%s — retry %d/%d in %.2fs",
+                        f" ({what})" if what else "", attempt, attempts - 1, delay)
+            import time
+
+            time.sleep(delay)
+            delay *= 2
+
+
+def release_com(*objs) -> None:
+    """Release COM objects created in a loop (doc 02 Rule 8: RCWs accumulate and
+    eventually destabilize a long batch). Never raises — a failed release must
+    not fail a build."""
+    try:
+        import pythoncom  # noqa: F401
+        from win32com.client import Dispatch  # noqa: F401
+    except Exception:
+        return
+    for obj in objs:
+        if obj is None:
+            continue
+        try:
+            obj._oleobj_.Release()      # pywin32's underlying IDispatch
+        except Exception:
+            pass
+
+
 def connect_to_solidworks():
     """Connect to a running SolidWorks instance, or launch a new one.
 
@@ -562,7 +637,9 @@ def check_rebuild_errors(sw_doc) -> bool:
             continue  # this getter doesn't resolve on this install — try the next
 
     try:
-        ok = bool(sw_doc.ForceRebuild3(True))
+        # Retried on the busy HRESULTs only: a rebuild is exactly what SolidWorks
+        # is busy doing when it rejects a call (doc 02 Rule 8 / doc 10).
+        ok = bool(com_retry(sw_doc.ForceRebuild3, True, what="ForceRebuild3"))
     except Exception as e:
         # The rebuild call itself could not be made — this is NOT "clean", it is
         # unknown, and unknown must not silently pass as success.
@@ -655,14 +732,17 @@ def _body_center_xy_m(sw_doc) -> Optional[tuple[float, float]]:
     Used to place holes whose location was never dimensioned: centring on the
     ACTUAL body (rather than the extracted envelope, which can be missing a
     length/width and collapse to an edge) guarantees the cut lands on material."""
+    body = None
     try:
-        bodies = sw_doc.GetBodies2(0, False)
+        bodies = com_retry(sw_doc.GetBodies2, 0, False, what="GetBodies2")
         body = bodies[0] if isinstance(bodies, (list, tuple)) else bodies
         box = body.GetBodyBox()  # (x1, y1, z1, x2, y2, z2) in meters
         return (box[0] + box[3]) / 2.0, (box[1] + box[4]) / 2.0
     except Exception as e:
         log.warning("Could not read body bounding box for centring: %s", e)
         return None
+    finally:
+        release_com(body)      # RCWs from per-call enumeration accumulate
 
 
 def _draw_circles(sw_doc, centers_m: list[tuple[float, float]], radius_m: float) -> None:

@@ -1065,6 +1065,28 @@ def main() -> int:
             except Exception as e:
                 lines.append(f"  [yellow]Human-assist escalation failed:[/yellow] {type(e).__name__}: {e}")
 
+            # Validation scorecard + delivery report (reference docs 07 / 09) —
+            # the same two artifacts the --views-folder path writes, so the
+            # verdict does not depend on which entry point was used.
+            try:
+                from pipeline.engineering_review import write_delivery_report
+                from pipeline.validation import write_scorecard
+
+                sc = write_scorecard(pkg.root, pkg.root.name, raw_extraction)
+                if sc is not None:
+                    card = json.loads(sc.read_text(encoding="utf-8"))
+                    lines.append(f"  Validation: {card.get('overall')} ({sc.name})")
+                    _plan = json.loads(
+                        Path(pkg.build_plan_json).read_text(encoding="utf-8"))
+                    dr = write_delivery_report(pkg.root, pkg.root.name, card,
+                                               _plan.get("engineering_review") or [],
+                                               {"part_folder": str(pkg.root)})
+                    if dr is not None:
+                        lines.append(f"  Delivery report: {dr.name}")
+            except Exception as e:
+                lines.append(f"  [yellow]Validation scorecard failed:[/yellow] "
+                             f"{type(e).__name__}: {e}")
+
             # Canonical per-feature ledger (REFACTOR_ANALYSIS §1.2) — the same
             # artifact the --views-folder path writes, so "what happened to F004?"
             # is answered identically regardless of entry point.

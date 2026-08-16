@@ -240,6 +240,41 @@ def collapse_dimension_values(
     return values, notes
 
 
+def infer_projection_angle(declared: str, drawing_standard: str,
+                           units: str) -> "tuple[str, str, str]":
+    """Establish the drawing's projection convention (reference doc 04).
+
+    Returns ``(angle, source, basis_note)``. The DECLARED symbol always wins. If
+    no symbol was read, the doc's rule applies — ANSI/inch drawings are third
+    angle, ISO/metric drawings are first angle — and the result is returned with
+    the reason, so the caller records a flagged ASSUMPTION rather than a silent
+    convention. Nothing here mirrors geometry; getting the angle wrong does, so
+    the pipeline's job is to make the choice visible, not to hide it.
+    """
+    declared = (declared or "").strip().lower()
+    if declared in ("third_angle", "first_angle"):
+        return declared, "title_block_symbol", "read from the title-block symbol"
+
+    std = (drawing_standard or "").strip().lower()
+    if any(k in std for k in ("asme", "ansi")):
+        return ("third_angle", "inferred_from_standard",
+                f"no projection symbol read; drawing standard {drawing_standard!r} "
+                f"is a US standard, which uses third angle")
+    if any(k in std for k in ("iso", "din", "en ", "jis")):
+        return ("first_angle", "inferred_from_standard",
+                f"no projection symbol read; drawing standard {drawing_standard!r} "
+                f"is a European/ISO standard, which commonly uses first angle")
+
+    if (units or "").strip().lower() == "inch":
+        return ("third_angle", "inferred_from_units",
+                "no projection symbol and no standard read; inch dimensions "
+                "indicate a US drawing, which uses third angle")
+    return ("first_angle", "inferred_from_units",
+            "no projection symbol and no standard read; metric dimensions "
+            "indicate an ISO drawing, where first angle is common — VERIFY, a "
+            "wrong projection angle mirrors the part")
+
+
 def is_envelope_label(label: str) -> bool:
     """True for a label that denotes a part OVERALL envelope dimension.
 
@@ -742,6 +777,29 @@ class DrawingData(BaseModel):
     general_tolerance: str = Field(
         default="",
         description="General tolerance block text (e.g. '.XX ±0.01, .XXX ±0.005'); empty if not given",
+    )
+    # Projection angle (reference doc 04). Recorded because misreading it MIRRORS
+    # the whole part — the one drawing-reading error that produces a clean,
+    # confident, entirely wrong model. Additive: old extractions load as
+    # "unknown", which the validation scorecard reports as a mirror risk rather
+    # than silently assuming a convention.
+    projection_angle: Literal["third_angle", "first_angle", "unknown"] = Field(
+        default="unknown",
+        description=(
+            "Projection convention from the title-block symbol (truncated cone). "
+            "THIRD angle (US/ANSI): right view sits to the RIGHT of the front "
+            "view, top view ABOVE. FIRST angle (EU/ISO): right view to the LEFT, "
+            "top view BELOW. Report 'unknown' if no symbol is visible — do NOT "
+            "guess here; the pipeline infers and records a flagged assumption."
+        ),
+    )
+    projection_angle_source: str = Field(
+        default="",
+        description=(
+            "Set by the pipeline, leave default: how the angle was established "
+            "('title_block_symbol' | 'inferred_from_standard' | "
+            "'inferred_from_units' | 'defaulted')."
+        ),
     )
     coordinate_frame: dict = Field(
         default_factory=dict,

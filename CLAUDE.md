@@ -117,7 +117,8 @@ worked examples: EXTREME_README §6.**
 | 10.7 | `reconciliation.py::geometric_correction_loop` | bounded build→measure→correct→rebuild |
 | 10.8 | `human_assist.py` | the exit ramp: narrow questions, defaults that still ship |
 | 11 | `overview_validate.py` | overview image vs build **and** overview words vs macro package |
-| 12 | `engineering_review.py` | the single severity-ranked human report |
+| 11.5 | `validation.py` | the ONE scorecard: PASS / PASS_WITH_ASSUMPTIONS / FAIL over every measured layer (`validation.json`) |
+| 12 | `engineering_review.py` | the severity-ranked human report **and** the doc-09 delivery report (`<Part>_delivery_report.txt`) |
 | 13 | `learning_loop.py` | per-run failure brief into `Learning Loop/` |
 
 ### Cross-cutting modules (added/consolidated 2026-08-15)
@@ -162,6 +163,7 @@ worked examples: EXTREME_README §6.**
 | Is the OpenAI provider safe to use? | `docs/PROVIDER_STATUS.md` |
 | Why was HoleWizard5 removed? | `pipeline/experimental/README.md` (live evidence) |
 | How is a feature type actually constructed? | `pipeline/METHODS.md` |
+| What do the external reference docs say, and what did we adopt? | `docs/reference/TRIAGE.md`, `docs/reference/INTEGRATION_PLAN.md` |
 | Web UI layout, sheets, endpoints | `EXTREME_README.md` §10 |
 | Every output artifact per part | `EXTREME_README.md` §11 |
 

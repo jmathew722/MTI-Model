@@ -16,8 +16,10 @@ only a unit test; do not touch the build-engine language/architecture.
 pipeline currently has no field for it, so it cannot notice.
 
 * **Files touched:** `pipeline/schema.py` (add `projection_angle` +
-  `projection_angle_source`), `pipeline/extractor.py` (prompt asks for the
-  symbol), `pipeline/validation.py` (mirror-risk check).
+  `projection_angle_source` + `infer_projection_angle`), `pipeline/validation.py`
+  (mirror-risk layer). The extractor needed NO change: `DrawingData` IS the
+  forced tool's `input_schema`, so the new field's description is already part of
+  what the model is asked for.
 * **Created:** none.
 * **Test:** unit tests for the field + the inference rule + the check; then a
   real `--from-json` run on A050211E and 16247 confirming old extractions
@@ -27,11 +29,15 @@ pipeline currently has no field for it, so it cannot notice.
   assumed), and the scorecard raises a mirror-risk item when the angle is
   unknown or conflicts with the drawing's own evidence.
 
-**Result:** landed. `projection_angle` (`third_angle|first_angle|unknown`) and
-`projection_angle_source` on `DrawingData`; `infer_projection_angle()` applies
-the doc's rule (ANSI/inch → third, ISO/mm → first) and always reports its basis;
-`validation.py` raises `PROJECTION_UNKNOWN` (mirror risk) when nothing is
-recorded. Old JSONs load unchanged (asserted by test).
+**Result:** landed, with one deliberate change from the plan above. The plan
+said an unknown angle would be raised as a mirror-risk FAILURE. Implementing it
+showed that to be wrong: an unestablished angle does not mean the part is wrong,
+and failing every legacy extraction on it would drown the verdict. Doc 04's own
+prescription is to DEFAULT and DECLARE, so `infer_projection_angle()` applies the
+doc's rule (read symbol > ANSI/ISO standard > inch/metric units), always reports
+its basis, and the scorecard records it as a low-confidence ASSUMPTION plus an
+advisory that names the mirror risk in words. Verdict impact:
+`PASS_WITH_ASSUMPTIONS`, not `FAIL`. Old JSONs load unchanged (asserted).
 
 ## Phase B — Unified validation scorecard (doc 07) ✅ DONE
 
@@ -129,3 +135,17 @@ install. Adding a second API that probably shares that fate — without a live
 failing part to verify against — would be speculative work of the exact kind
 `REFACTOR_ANALYSIS.md` §2.1 just removed. Recorded here as the honest next item
 for someone with a reproducing part.
+
+---
+
+## Verification of the whole integration
+
+* **1200 tests pass** (1159 before this work; +41 across Phases A–F).
+* **All 15 saved extractions rebuild with zero errors** and every one now emits
+  `validation.json` and a delivery report.
+* **Two live SolidWorks builds** after the changes: A050211E
+  (`PASS_WITH_ASSUMPTIONS`, watertight, 7.5 × 7.498 × 0.5 in) and 16247
+  (`FAIL` — correctly: the drawing's 19.25 overall height against a built 18.25,
+  a genuine finding the scorecard now states in one line instead of leaving in
+  a text file).
+* The scorecard never contradicted the existing READY gate on any part.

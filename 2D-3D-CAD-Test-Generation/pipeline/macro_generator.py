@@ -174,6 +174,11 @@ class BuildStep:
     position_derivation: list[str] = field(default_factory=list)
     # Canonical slot decomposition: rectangle step is must_complete; fillet step
     # is defer_on_failure with its expected corner count + the slot schema block.
+    # Reference doc 05: WHY this step exists — the drawing dimensions and view
+    # behind it. Traceability runs both ways: a failed validation check names
+    # the dimension that drove it, and a dimension that drives no step at all is
+    # the doc's cheap missed-feature signal (validation.dimension_coverage).
+    evidence: dict = field(default_factory=dict)
     must_complete: bool = False
     defer_on_failure: bool = False
     corner_count_expected: int = 0
@@ -844,6 +849,7 @@ def _step_to_dict(s: BuildStep) -> dict[str, Any]:
         # --- additive: dimensioning-architecture anchors + derivation trace ---
         **({"anchors": s.anchors} if s.anchors else {}),
         **({"position_derivation": s.position_derivation} if s.position_derivation else {}),
+        **({"evidence": s.evidence} if s.evidence else {}),
     }
 
 
@@ -1308,6 +1314,43 @@ def _apply_solver_authority(feature: Feature, solved: dict, model: "DrawingData"
                  feature.id, sol.x, sol.y, feature.offset_x, feature.offset_y)
     feature.offset_x, feature.offset_y = round(sol.x, 6), round(sol.y, 6)
     feature.position_known = True
+
+
+def _attach_evidence(step: "BuildStep", model: DrawingData, feature: Feature) -> None:
+    """Record WHY this step exists: the drawing dimensions and view behind it.
+
+    Reference doc 05 asks every plan step to cite its evidence, for two reasons
+    that both pay off downstream: a failed validation check can name the
+    dimension that drove the step, and a dimension cited by NO step is a cheap
+    missed-feature signal (see validation.dimension_coverage). Pure metadata —
+    it never influences geometry.
+    """
+    dim_ids = list(feature.related_dimensions or [])
+    if feature.depth_dimension_id and feature.depth_dimension_id not in dim_ids:
+        dim_ids.append(feature.depth_dimension_id)
+    values: dict[str, Any] = {}
+    views: list[str] = []
+    for did in dim_ids:
+        d = model.dimension_by_id(did)
+        if d is None:
+            continue
+        values[did] = f"{d.applies_to or d.type.value} = {_v(d.value)}"
+        view = (getattr(d, "view", "") or "").strip()
+        if view and view not in views:
+            views.append(view)
+    ev: dict[str, Any] = {}
+    if dim_ids:
+        ev["dimension_ids"] = dim_ids
+    if values:
+        ev["values"] = values
+    if views:
+        ev["views"] = views
+    hole = model.hole_callout_for_feature(feature.id)
+    if hole is not None:
+        ev["callout"] = (hole.notes or "").strip() or f"{hole.type.value} dia {_v(hole.diameter)}"
+    if feature.description:
+        ev["description"] = feature.description
+    step.evidence = ev
 
 
 def _attach_anchor_provenance(step: "BuildStep", feature: Feature, solved: dict,
@@ -3286,6 +3329,7 @@ def generate_macro_package(
                          status, dimensions=used, notes=notes)
         _enrich_feature_step(step, model, feature, resolution, step_flags)
         _attach_anchor_provenance(step, feature, solved_positions, model)
+        _attach_evidence(step, model, feature)
         pkg.steps.append(step)
         if status == "needs_review":
             pkg.needs_review.append(step)

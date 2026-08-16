@@ -328,3 +328,69 @@ class TestPartTemplateResolution:
         msg = str(e.value)
         assert "stale.prtdot (configured, missing)" in msg
         assert "SOLIDWORKS_TEMPLATE_PATH" in msg      # tells the operator the fix
+
+
+# --------------------------------------------------------------------------- #
+# COM stability (reference doc 02 Rule 8 / doc 10) — Phase F
+# --------------------------------------------------------------------------- #
+class TestComRetry:
+    """SolidWorks rejects calls while it is busy. That is the ONE condition where
+    retrying the identical call is right — everywhere else in this pipeline a
+    retry must change something (deferred_retry), so this retry is deliberately
+    narrow to the busy HRESULTs."""
+
+    class _Busy(Exception):
+        def __init__(self, code=-2147417846):
+            super().__init__(code)
+            self.hresult = code
+
+    def test_a_busy_server_is_retried_and_succeeds(self):
+        calls = {"n": 0}
+
+        def flaky():
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise self._Busy()
+            return "built"
+
+        assert swb.com_retry(flaky, backoff=0.001) == "built"
+        assert calls["n"] == 3
+
+    def test_a_real_error_is_not_retried(self):
+        calls = {"n": 0}
+
+        def broken():
+            calls["n"] += 1
+            raise ValueError("zero-thickness geometry")
+
+        with pytest.raises(ValueError):
+            swb.com_retry(broken, backoff=0.001)
+        assert calls["n"] == 1, "a genuine failure must surface immediately"
+
+    def test_it_gives_up_and_reraises_after_the_cap(self):
+        def always_busy():
+            raise self._Busy()
+
+        with pytest.raises(Exception):
+            swb.com_retry(always_busy, attempts=2, backoff=0.001)
+
+    @pytest.mark.parametrize("code", [-2147417846, -2147418111, -2147417843])
+    def test_the_busy_hresult_family_is_recognised(self, code):
+        assert swb._is_com_busy(self._Busy(code))
+
+    def test_a_textual_busy_message_is_recognised(self):
+        assert swb._is_com_busy(Exception("Call was rejected by callee."))
+        assert not swb._is_com_busy(Exception("Feature creation returned Nothing"))
+
+    def test_release_com_never_raises(self):
+        class Awkward:
+            @property
+            def _oleobj_(self):
+                raise RuntimeError("gone")
+
+        swb.release_com(None, object(), Awkward())     # must not raise
+
+    def test_the_rebuild_call_is_wrapped(self):
+        import inspect
+
+        assert "com_retry" in inspect.getsource(swb.check_rebuild_errors)

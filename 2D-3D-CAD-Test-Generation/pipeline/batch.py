@@ -732,6 +732,29 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
     if gate_reasons:
         detail = ("; ".join(gate_reasons) + (f"; {detail}" if detail else ""))[:300]
 
+    # Validation scorecard + delivery report (reference docs 07 and 09). The
+    # scorecard is the ONE verdict line over everything measured; the delivery
+    # report is the one page a human acts on. Both are assembled from artifacts
+    # already written, after every other stage has had its say, and neither can
+    # fail a run.
+    try:
+        from pipeline.engineering_review import write_delivery_report
+        from pipeline.validation import write_scorecard
+
+        sc_path = write_scorecard(part_dir, part, drawing_data)
+        if sc_path is not None:
+            import json as _json
+
+            card = _json.loads(sc_path.read_text(encoding="utf-8"))
+            print(f"[VALIDATION] {card.get('overall')} — {sc_path.name}", flush=True)
+            dr = write_delivery_report(
+                part_dir, safe, card, items if "items" in dir() else [],
+                {"part_folder": str(part_dir)})
+            if dr is not None:
+                print(f"[DELIVERY] {dr.name}", flush=True)
+    except Exception as e:
+        log.warning("Validation scorecard/delivery report failed (non-fatal): %s", e)
+
     # Canonical per-feature ledger (REFACTOR_ANALYSIS §1.2): ONE stage-tagged
     # history per feature, assembled from the artifacts every back-half stage
     # already wrote. Written last so it sees them all; a pure view, so failing to

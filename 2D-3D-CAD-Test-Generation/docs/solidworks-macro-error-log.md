@@ -52,3 +52,55 @@ human — never to decide whether the field got a high-res read at all.
 failure class above, add its `EXXX` cross-reference here** (e.g. a mis-read hole
 count that produced a wrong pattern build). None have traced to a build failure
 yet; this note marks where such entries go.
+
+---
+
+## Environment, COM and geometry failure modes (merged from reference doc 10)
+
+Merged 2026-08-16 from `docs/reference/10_common_failure_modes.md` so this file
+stays the ONE canonical troubleshooting reference (the alternative — a second
+competing failure doc — is exactly the problem `REFACTOR_ANALYSIS.md` §1.8 just
+fixed). Rows marked **[repo]** are where this project's live experience differs
+from the generic guidance; trust those over the generic advice here.
+
+### Environment / setup
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `CreateInstance` hangs, SW splash never finishes | first-run dialogs, license prompt, or a crashed instance | kill stray `SLDWORKS.exe`; launch SW manually once per machine; then attach |
+| `InvalidCastException` on the app object | interop version ≠ installed SW | **[repo]** N/A — this pipeline is late-bound `win32com`, so there are no interop DLLs to mismatch. The equivalent failure here is a method that silently does not resolve; see E-series below. |
+| Calls fail with `RPC_E_SERVERCALL_RETRYLATER` | SW busy (rebuilding, dialog open) | **[repo]** `solidworks_builder.com_retry()` retries the busy HRESULT family with bounded backoff (added 2026-08-16, reference doc 02). |
+| Works on run 1, flaky on run N | RCW/COM object leaks | **[repo]** `solidworks_builder.release_com()` releases objects created in enumeration loops (added 2026-08-16). |
+| Part template not found after a SW upgrade | `SOLIDWORKS_TEMPLATE_PATH` pinned to the old version | **[repo]** `resolve_part_template()` falls back: configured path → SW's own preference → newest installed template. A stale setting is reported, not fatal. |
+| Automation blocked | SW security settings / add-in interference | Tools → Options; disable nonessential add-ins for the automation session |
+
+### Dialog suppression
+Dialogs hang unattended runs. Never call an API that opens UI; use silent save
+options; prefer `ForceRebuild3(False)` + programmatic error reading over any
+UI-triggering path. **[repo]** Generated VBA deliberately DOES use `MsgBox` for
+assumption flags — those macros are run by a human in SolidWorks, not
+unattended; the COM path (`solidworks_builder.py`) opens no UI.
+
+### Geometry failures
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "Zero-thickness geometry" | a cut/boss leaves surfaces touching along a line | overshoot the boundary — **[repo]** `slot_cut.EDGE_OVERSHOOT_EPS` does exactly this for open-edge notches |
+| Fillet fails on some edges | radius ≥ the local wall/edge size | reduce, or fillet edge-by-edge and report the skips — **[repo]** the deferred-retry queue does this (`deferred_retry.py`) |
+| Boss creates a second body | it does not touch the base, or merge=false | assert body count after every additive feature — **[repo]** `validation.py` layer `solid_body` |
+| Cut splits the part in two | depth/position wrong | re-check that step's evidence dims — **[repo]** each step now records them (`BuildStep.evidence`) |
+| Sketch "cannot be used" | open contour, self-intersection, duplicate entities | compute every vertex from the plan, never by chaining additions around a profile |
+| Feature builds in the wrong direction | direction flag | **[repo]** `FeatureCut4` is already called with a flip-retry (both directions) before failing |
+
+### Floating-point discipline
+Compute every sketch vertex closed-form from plan dimensions, never by chaining
+additions around a profile (accumulated error leaves micro-gaps that break
+contours); compare coordinates with a tolerance, never `==`; keep angles as
+exact expressions.
+
+### Version sensitivity
+Feature methods get superseded (`FeatureExtrusion2`→`3`, `FeatureCut3`→`4`).
+**[repo]** Hole Wizard is called out in doc 10 as "the most version-volatile" API
+in the product — this project live-verified that on SolidWorks 2026 and REMOVED
+its Hole Wizard path entirely; see `pipeline/experimental/README.md`. The
+plain-cut fallback doc 10 recommends is this pipeline's only hole method.
