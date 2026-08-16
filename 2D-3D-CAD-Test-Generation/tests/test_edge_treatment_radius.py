@@ -99,3 +99,21 @@ class TestEdgeTreatmentRadius:
         relative, not an absolute radius limit."""
         assert _warnings_about(_plate_with_edge_treatment(1.0, 0.4), "F2") == []
         assert _warnings_about(_plate_with_edge_treatment(0.5, 0.4), "F2")
+
+    def test_the_warning_actually_reaches_the_human(self):
+        """A check nobody reads is not a check.
+
+        The warning is only useful if it survives into the VERIFICATION REPORT
+        text that main.py writes out — computing it and dropping it would look
+        identical from the unit tests above.
+        """
+        from pipeline.validator import format_verification_report
+
+        model = _plate_with_edge_treatment(0.5, 0.4)
+        out = run_verification(model)
+        m, report = out if isinstance(out, tuple) else (model, out)
+        text = format_verification_report(m, report)
+        assert "F2" in text and "half" in text.lower(), (
+            "the edge-treatment warning is computed but never rendered into the "
+            "verification report the operator actually reads"
+        )
