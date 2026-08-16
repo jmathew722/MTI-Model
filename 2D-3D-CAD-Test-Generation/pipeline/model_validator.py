@@ -29,12 +29,53 @@ def _coerce(data: Union[DrawingData, dict[str, Any]]) -> DrawingData:
 
 
 def _dims_in_meters(model: DrawingData, applies_to: str) -> list[float]:
-    """All dimension values (in meters) whose applies_to matches."""
+    """OVERALL-envelope dimension values (in meters) for one axis token.
+
+    Only ENVELOPE dimensions count (``Dimension.is_envelope``: a clean
+    length/width/height token, or a label declaring totality — never a
+    feature-local size). The bounding box of the whole part can only be compared
+    against dimensions that describe the whole part.
+
+    Before 2026-08-16 this matched any dimension whose raw label was exactly
+    "length", which swept in the resolver's DERIVED cut lengths: 16247 failed
+    validation because a relief cut's inferred 4.8125" length was not among the
+    part's overall extents — which it never should have been. Matching is on the
+    CANONICAL token too, so "overall_height" is compared as height instead of
+    being skipped for not being spelled "height".
+    """
+    feature_local = _feature_local_dimension_ids(model)
     out = []
     for d in model.dimensions:
-        if (d.applies_to or "").lower().strip() == applies_to:
+        if not d.is_envelope or d.id in feature_local:
+            continue
+        if (d.canonical_applies_to or (d.applies_to or "").lower().strip()) == applies_to:
             out.append(to_meters(d.value, d.unit.value))
     return out
+
+
+def _feature_local_dimension_ids(model: DrawingData) -> set[str]:
+    """Dimension ids owned ONLY by a non-base feature — a cut's or a boss's own
+    size, never the part's envelope.
+
+    The resolver derives sizes for sub-features under generic labels: 16247's
+    relief cut got ``D900 applies_to="length" = 4.8125``, which is a perfectly
+    good label *within that feature* (the macro generator needs the key "length"
+    to size the cut's rectangle) but is meaningless as a whole-part dimension.
+    Comparing it to the part's bounding box failed a correct build.
+
+    A dimension linked to the base solid, or to no feature at all (a free-
+    standing drawing dimension), is NOT feature-local.
+    """
+    base_types = {"extrude_boss", "revolve"}
+    base_ids: set[str] = set()
+    other_ids: set[str] = set()
+    for f in model.features:
+        ids = set(f.related_dimensions or [])
+        if f.depth_dimension_id:
+            ids.add(f.depth_dimension_id)
+        target = base_ids if str(getattr(f.type, "value", f.type)) in base_types else other_ids
+        target |= ids
+    return other_ids - base_ids
 
 
 def _matches_any(actual_m: float, expected_values_m: list[float]) -> bool:

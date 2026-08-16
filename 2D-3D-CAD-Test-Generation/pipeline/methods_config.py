@@ -22,9 +22,10 @@ import os
 from pathlib import Path
 
 # Verified defaults (feature class -> construction method id).
-#   hole:  sketch_circle_cut  — the proven path. HoleWizard5 exists (opt-in via
-#          MTI_ENABLE_HOLE_WIZARD) but returned None on SolidWorks 2024 even on a
-#          clean part, so it is NOT yet the default (see METHODS.md, 2026-07-10).
+#   hole:  sketch_circle_cut  — the ONLY hole method. The HoleWizard5 route was
+#          removed 2026-08-16: live verification on SolidWorks 2026 (rev 34.3.2)
+#          returned None from the API for four different parameter mappings on a
+#          clean part with the points placed (pipeline/experimental/README.md).
 #   slot:  slot2d (CadQuery) / create_sketch_slot (SolidWorks) — one API call
 #          yields a closed obround; verified headless via CadQuery.
 #   cut:   sketch_rect_cut with ORIGIN-ANCHORED coordinates (each cut sketch is
@@ -40,7 +41,7 @@ _DEFAULTS: dict[str, str] = {
 }
 
 _KNOWN_METHODS = {
-    "hole": {"sketch_circle_cut", "hole_wizard5"},
+    "hole": {"sketch_circle_cut"},
     "slot": {"slot2d", "create_sketch_slot", "capsule_profile"},
     "cut": {"sketch_rect_cut"},
 }
@@ -71,13 +72,9 @@ def load_methods() -> dict[str, str]:
 
 def method_for(feature_class: str) -> str:
     """Preferred construction method id for a feature class (safe default if
-    unknown). ``hole`` also honors the legacy ``MTI_ENABLE_HOLE_WIZARD`` flag."""
+    unknown)."""
     methods = load_methods()
-    m = methods.get(feature_class, _DEFAULTS.get(feature_class, ""))
-    if feature_class.startswith("hole") and os.getenv("MTI_ENABLE_HOLE_WIZARD"):
-        # Explicit opt-in still wins for holes (matches solidworks_builder).
-        return "hole_wizard5"
-    return m
+    return methods.get(feature_class, _DEFAULTS.get(feature_class, ""))
 
 
 def is_known(feature_class: str, method: str) -> bool:

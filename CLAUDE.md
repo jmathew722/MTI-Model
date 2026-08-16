@@ -68,8 +68,7 @@ SolidWorks session, zero API cost).
 Setup: `python setup.py`, then put `ANTHROPIC_API_KEY` in `.env` (gitignored).
 Optional env: `EXTRACTION_MODEL` (default `claude-sonnet-5`),
 `SOLIDWORKS_TEMPLATE_PATH` (must point at a real `.prtdot`), `MAX_IMAGE_LONG_EDGE`,
-`AI_PROVIDER` (see `docs/PROVIDER_STATUS.md`), `MTI_EMIT_CSHARP`,
-`MTI_ENABLE_HOLE_WIZARD` (quarantined — see `pipeline/experimental/README.md`).
+`AI_PROVIDER` (see `docs/PROVIDER_STATUS.md`), `MTI_EMIT_CSHARP`.
 
 **Web UI dev gotcha:** after editing `webapp/app.py` or pipeline code, restart the
 uvicorn server on 8092 — it otherwise serves stale endpoints.
@@ -160,7 +159,7 @@ worked examples: EXTREME_README §6.**
 | What is redundant / what to refactor next? | `REFACTOR_ANALYSIS.md` (repo root) |
 | Which DWG path handles this file, and why are there two? | `docs/DWG_PATHS.md` |
 | Is the OpenAI provider safe to use? | `docs/PROVIDER_STATUS.md` |
-| Why is HoleWizard5 off? | `pipeline/experimental/README.md` |
+| Why was HoleWizard5 removed? | `pipeline/experimental/README.md` (live evidence) |
 | How is a feature type actually constructed? | `pipeline/METHODS.md` |
 | Web UI layout, sheets, endpoints | `EXTREME_README.md` §10 |
 | Every output artifact per part | `EXTREME_README.md` §11 |

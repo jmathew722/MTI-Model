@@ -24,7 +24,7 @@ change stays readable next to the result.
 | 1.6 | `dwg_native/` ambiguity | **DONE (option a)** | `docs/DWG_PATHS.md` + `pipeline/dwg_routing.py` — permanent second product, explicit routing, parity checklist |
 | 1.7 | C# emitted on every run | **DONE** | opt-in `--emit-csharp` / `MTI_EMIT_CSHARP`; default OFF |
 | 1.8 | Two hand-maintained mega-docs | **DONE** | `EXTREME_README.md` is canonical; `CLAUDE.md` rescoped to commands/invariants/stage-index |
-| 2.1 | HoleWizard5's fate | **DONE (quarantined)** | `pipeline/experimental/` + README with the exact blocker, revival steps, and the delete-if-never-scheduled decision |
+| 2.1 | HoleWizard5's fate | **DONE (verified, then removed)** | live SolidWorks 2026 run returned `None` for four parameter mappings → path, flag and test deleted; evidence + recovery refs in `pipeline/experimental/README.md` |
 | 2.2 | OpenAI provider status | **DONE** | `provider_status()` + runtime warning; real call-site contract tests; `docs/PROVIDER_STATUS.md` |
 | 2.3 | Feature state machine as a module | **DONE** | same as 1.2 |
 | 2.4 | DWG path ambiguity before more DWG work | **DONE** | same as 1.6 |
@@ -69,11 +69,13 @@ extractions rebuild with zero errors; the two parts that exit 8 do so for genuin
 drawing ambiguity (an extraction declaring 4 instances with one dimensioned
 position), correctly flagged with an assist question rather than guessed.
 
-**Still open, and honestly so:** promoting the OpenAI path to "production" needs
-the batch quality comparison in `docs/PROVIDER_STATUS.md` (its *plumbing* is now
-live-verified — see that file); promoting HoleWizard5 needs the live session in
-`pipeline/experimental/README.md`. Both are judgement calls that need a decision
-about cost/scope, not more code.
+**Round 2 closed both of those** except the one that is genuinely the owner's to
+make: HoleWizard5 was verified live and removed (§2.1 above), and the OpenAI
+quality comparison is now a runnable command
+(`tools/compare_providers.py --dry-run` costs nothing and shows exactly what a
+real run would spend). It was deliberately not run on the owner's key: a
+one-or-two-part sample is too small to justify switching providers, so spending
+on it would buy an inconclusive answer.
 
 ---
 
@@ -83,10 +85,12 @@ about cost/scope, not more code.
 - ~~`dwg_native/` does not yet write ledger entries~~ — **closed 2026-08-16**: it
   writes `<part>_feature_ledger.json` like the vision pipeline, and the ledger
   reads both naming conventions.
-- Promoting or deleting the OpenAI path needs the batch comparison in
-  `docs/PROVIDER_STATUS.md`; promoting or deleting HoleWizard5 needs the live
-  session in `pipeline/experimental/README.md`. Both are decisions that require a
-  machine/run this refactor could not perform.
+- ~~Promoting or deleting HoleWizard5~~ — **closed 2026-08-16**: verified live,
+  did not work, removed.
+- Promoting the OpenAI path to "production" is the one remaining open decision.
+  Everything needed to make it is built (`tools/compare_providers.py`); what is
+  missing is a budget decision about a meaningful sample, which belongs to
+  whoever intends to use that path.
 
 ---
 

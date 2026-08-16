@@ -37,7 +37,7 @@ from pipeline.schema import (
     PatternKind,
     collapse_dimension_values,
 )
-from utils.logger import get_logger
+from utils.logger import get_logger, warn_once
 from utils.unit_converter import assert_meters, to_meters, to_radians
 
 log = get_logger()
@@ -419,7 +419,8 @@ def get_dimensions_for_feature(model: DrawingData, feature: Feature) -> dict[str
     # solid, found 2026-08-16 by measuring both builders' bounding boxes.
     canon_values, notes = collapse_dimension_values(canon_items)
     for note in notes:
-        log.warning("%s: colliding dimensions — %s", feature.id, note)
+        warn_once(log, f"dim-collision:{feature.id}:{note}",
+                  "%s: colliding dimensions — %s", feature.id, note)
     resolved.update(canon_values)
 
     # Also expose the depth explicitly under "depth" for builders that need it.
@@ -770,66 +771,6 @@ def _do_cut(sw_doc, feature, through_all: bool, depth_m: Optional[float]):
             f"depth in meters) — the cut removes no material (coincident with a face or "
             f"zero-area profile); check the profile geometry, not the build call.")
     return feat
-
-
-def _wizard_hole_type(h) -> int:
-    """Classify a callout into a ``swWzdGeneralHoleTypes_e`` value.
-
-    We drive every case through the diameter-based LEGACY hole (``swWzdLegacy``):
-    it is placed by an explicit diameter and needs no fastener standard/size
-    table lookup (those indices are locale/data-pack specific and the #1 source
-    of wrong-size or failed wizard holes). This yields a REAL hole-wizard feature
-    at the resolved coordinates — replacing the open/empty-sketch ``FeatureCut4``
-    failure class — while the drill diameter stays exactly the callout's. A
-    tapped callout still drills its tap hole here; the thread stays cosmetic per
-    the repo convention (real helical threads are prohibited)."""
-    return _const("swWzdLegacy", 5)
-
-
-# IFeatureManager::HoleWizard5 (dispid 222) parameter order, verified against the
-# installed sldworks.tlb: GenericHoleType(long), StandardIndex(long),
-# FastenerTypeIndex(long), SSize(str), EndType(short), Diameter, Depth, Length,
-# Value1..Value12 (doubles), ThreadClass(str), RevDir, FeatureScope, AutoSelect,
-# AssemblyFeatureScope, AutoSelectComponents, PropagateFeatureToParts (bools).
-# StandardIndex/FastenerTypeIndex are LONGS (0 for the legacy diameter-driven
-# hole) — passing strings there is what raised "Type mismatch" (-2147352571).
-
-
-def _try_hole_wizard(sw_doc, model, feature: Feature, h, centers_m: list[tuple[float, float]],
-                     through_all: bool, depth_m: Optional[float]):
-    """Best-effort REAL Hole Wizard feature (IFeatureManager::HoleWizard5).
-
-    Additive path (2026-07-10 redesign): a drilled/tapped/cbore/csk callout
-    becomes a proper wizard hole feature instead of a bare ``FeatureCut4`` circle
-    (which fails on an open/empty sketch). Placement uses a pre-selected point
-    sketch — one point per resolved center on the target face — so every instance
-    is drilled at its exact X/Y. Returns the created feature on success, or
-    ``None`` to fall back to the exact existing sketch-cut path
-    (``_circular_cut_at``): nothing regresses on ANY failure. After creation the
-    build is verified (rebuild OK + solid body present); a no-op wizard hole is
-    deleted and we fall back rather than ship bad geometry.
-
-    OPT-IN (``MTI_ENABLE_HOLE_WIZARD=1``): default OFF. Live testing on
-    SolidWorks 2024 showed ``HoleWizard5`` returning ``None`` for the
-    diameter-driven legacy hole even on a clean part with a valid face + point
-    sketch — the parameter/Value-slot mapping is version/locale specific (the
-    exact quirk the redesign spec flagged). Until that mapping is nailed down on
-    a live machine, the default stays the proven sketch-circle cut so the working
-    build never regresses; flip the flag to iterate on the wizard call.
-
-    Delegates to :mod:`pipeline.hole_wizard` (Phase 3b) — the standalone module
-    that turns the callout sub-type (simple/tapped/counterbore/countersink/
-    clearance) into the correctly-typed ``HoleWizard5`` feature with named enum
-    constants and the ANSI clearance table, and cross-checks placement against
-    ``coordinate_normalize``. This function stays as the call site
-    ``build_hole`` already uses; the real builder lives in the module.
-    """
-    from pipeline.experimental import hole_wizard
-
-    return hole_wizard.build_wizard_hole(
-        sw_doc, model, feature, h, centers_m,
-        through_all=through_all, depth_m=depth_m,
-    )
 
 
 def _select_top_face(sw_doc, center_m: tuple[float, float]) -> bool:
@@ -1599,14 +1540,12 @@ def build_hole(sw_doc, model, feature: Feature, dims: dict[str, float]):
             raise SolidWorksError(f"blind hole {h.id} has no depth.")
         depth_m = to_meters(h.depth, unit)
 
-    # Additive: try a REAL Hole Wizard feature first (carries thread/cbore/csk
-    # callout data); fall back to the exact sketch-circle cut on any failure so
-    # the working build path is never lost.
-    wizard = _try_hole_wizard(sw_doc, model, feature, h, positions_m, thru, depth_m)
-    if wizard is not None:
-        _rename_feature(wizard, f"{feature.id}_HoleWizard")
-        return wizard
-
+    # Holes are built as sketch-circle cuts. A HoleWizard5 path existed here
+    # behind MTI_ENABLE_HOLE_WIZARD; it was removed 2026-08-16 after live
+    # verification on SolidWorks 2026 (rev 34.3.2) returned None from the API
+    # for FOUR different parameter mappings, with a valid solid and the points
+    # successfully placed — see pipeline/experimental/README.md for the evidence
+    # and how to recover the code if the mapping is ever solved.
     feat = _circular_cut_at(sw_doc, feature, positions_m, dia_m / 2.0, thru, depth_m)
 
     # Counterbore: a second concentric blind cut with the larger diameter.

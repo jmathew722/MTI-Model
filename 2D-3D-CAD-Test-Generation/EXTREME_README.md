@@ -121,7 +121,6 @@ Converter** (whichever is present).
 - `OPENAI_API_KEY` — required only when `AI_PROVIDER=openai`.
 - `SOLIDWORKS_TEMPLATE_PATH` — path to a real `.prtdot`; falls back to the SW default.
 - `MAX_IMAGE_LONG_EDGE` — raster cap override.
-- `MTI_ENABLE_HOLE_WIZARD=1` — opt-in real HoleWizard5 hole path (default OFF).
 - `MTI_METHOD_<CLASS>` / `methods.json` — override the construction-method dispatch.
 - `EXPLAINER_OLLAMA_MODEL` — local explainer model (default `qwen3.6:latest`).
 
@@ -196,7 +195,6 @@ cd webapp; .\run.ps1                 # creates .venv, installs pinned deps, star
 │   ├── batch.py                # the --views-folder orchestration (process_drawing_data)
 │   ├── construction_experiment.py # scratch base+feature through candidate methods → seed METHODS
 │   ├── methods_config.py       # machine-readable construction-method dispatch
-│   ├── hole_wizard.py / hole_wizard_constants.py # opt-in real HoleWizard5 + ANSI clearance tables
 │   ├── drill_sizes.py / gauge.py / callout_qty.py / unit helpers
 │   ├── usage_log.py            # token/USD ledger (PRICING table for both providers)
 │   ├── image_coordinates.py / view_ingest.py  # multi-view ingest helpers
@@ -662,12 +660,13 @@ right after creation; per-feature outcomes written to `macro_result.json` so a f
 surfaces as the exact feature, never a generic exit code. Slots route through
 `build_slot` (rectangle cut + interior fillets), aligned to the actual body's min
 corner. Base orientation via the shared `profile_extents` sizer (horizontal=length/
-width, vertical=height). Countersink builds real conical geometry. Optional
-`HoleWizard5` path (`_try_hole_wizard`, `MTI_ENABLE_HOLE_WIZARD=1`, default OFF: 27-arg
-signature verified against the tlb, but SW2024 returned `None` on a clean part, so
-default-off until the version/locale Value-slot mapping is nailed down; falls back to
-the proven `_circular_cut_at` sketch-circle cut). **Live-discovered API surprises now
-guarded:** rebuild-error-count APIs never resolve; `SaveAs3` returns an int bitmask,
+width, vertical=height). Countersink builds real conical geometry. Holes are built
+by the proven `_circular_cut_at` sketch-circle cut — the optional `HoleWizard5` path
+was REMOVED 2026-08-16 after live verification on SolidWorks 2026 returned `None` for
+four parameter mappings (`pipeline/experimental/README.md`). Part templates resolve
+through `resolve_part_template` (configured path → SolidWorks' preference → newest
+installed template), so a version upgrade cannot silently break every build.
+**Live-discovered API surprises now guarded:** rebuild-error-count APIs never resolve; `SaveAs3` returns an int bitmask,
 not a bool.
 
 ### Workstream 1 — Deferred feature retry (`deferred_retry.py`)
@@ -1101,12 +1100,13 @@ truth, gate don't resolve), a DWG on the vision path stays there and gains Stage
 
 ## 14. WHERE TO IMPROVE (extension points that respect the invariants)
 
-- **Live-verify HoleWizard5** on the target SW2024/locale, nail the Value-slot mapping,
-  and promote it to default in `methods_config.py` once it passes Phase A across the
-  golden set. It is now QUARANTINED in `pipeline/experimental/` behind
-  `MTI_ENABLE_HOLE_WIZARD` with the exact blocker and revival steps in
-  `pipeline/experimental/README.md` (REFACTOR_ANALYSIS §2.1) — if the live
-  verification is never scheduled, the honest next step is deletion.
+- **~~Live-verify HoleWizard5~~ — done, and removed.** The verification ran on a
+  live SolidWorks 2026 (rev 34.3.2) session on 2026-08-16: `HoleWizard5` is
+  present on the FeatureManager but returned `None` for FOUR parameter mappings
+  on a clean part with the points placed. The path, its opt-in flag and its test
+  were deleted; holes build via the proven sketch-circle cut. Evidence, git refs
+  to recover the code, and two fresher API leads (`SimpleHole2`, `AdvancedHole`)
+  are in `pipeline/experimental/README.md`.
 - **Smart sketch dimensioning** (`AddDimension2`) is deliberately opt-in-future — the
   fully-defined gate currently only *observes* under-defined sketches. Verify it live
   before turning it into a fixer.

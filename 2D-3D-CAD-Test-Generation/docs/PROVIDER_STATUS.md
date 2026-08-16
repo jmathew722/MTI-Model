@@ -65,17 +65,37 @@ and against the live API (see above) — while the OUTPUT QUALITY is not.**
 Extraction accuracy on real drawing images and real-world per-part cost remain
 unmeasured on the OpenAI path.
 
-## To promote OpenAI to "production"
+## To promote OpenAI to "production" — one command
 
-1. Run the standard test batch on both providers:
-   `python main.py --views-folder ..\test_drawings\Test2 --output ..\test_drawings\Test2\output`
-   with `AI_PROVIDER` unset, then with `AI_PROVIDER=openai` (and
-   `--no-extract-cache`, or the cached Anthropic extraction is what you measure).
-2. Diff the per-part `_extraction.json` and READY status; record dimension-level
-   disagreements in `Learning Loop/`.
-3. Compare `token_usage_log.txt` cost lines for the same parts.
-4. If quality holds, flip `PROVIDER_STATUS["openai"]` to `"production"` in
-   `pipeline/ai_provider.py` and note the verification date here.
+The remaining gate is drawing-extraction QUALITY, which costs real money on both
+keys. That comparison is packaged as a runnable tool rather than a list of
+instructions, so the only thing left is the decision to spend:
+
+```powershell
+# what it would run and why it costs money — no API calls
+python tools\compare_providers.py --parts ..\test_drawings\Test2 --dry-run
+
+# the real comparison (prompts before spending; --yes to skip)
+python tools\compare_providers.py --parts ..\test_drawings\Test2 --limit 3
+```
+
+It extracts each part once per provider with the **cache disabled** (a cached
+Anthropic extraction compared against a fresh OpenAI one would prove nothing),
+with the region pass off to keep it to one read per sheet, and reports:
+
+* per-dimension agreement within 0.5%, and every value where the two differ;
+* the **only-anthropic / only-openai** columns — a dimension one provider missed
+  entirely matters more than one it read differently;
+* hole-callout counts, and measured cost per provider from the usage ledger.
+
+Then, **if and only if** the agreement and the missed-dimension columns are
+acceptable, flip `PROVIDER_STATUS["openai"]` to `"production"` in
+`pipeline/ai_provider.py` and record the date and numbers here.
+
+This was deliberately NOT run on the owner's key during the refactor: a one- or
+two-part sample is too small to justify the switch, so spending on it would buy
+an inconclusive answer. The decision — and the budget for a meaningful sample —
+belongs to whoever actually intends to use the OpenAI path.
 
 ## If that comparison is never run
 

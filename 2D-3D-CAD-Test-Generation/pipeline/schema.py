@@ -244,15 +244,22 @@ def is_envelope_label(label: str) -> bool:
     """True for a label that denotes a part OVERALL envelope dimension.
 
     Accepts the clean canonical tokens (length/width/height) and verbose labels
-    that say "overall" (e.g. "width (top view, overall horizontal)"), but NOT
-    feature-local sizes like "width (front view, small feature)" — those would
-    corrupt the envelope used for hole-centering and feasibility checks.
+    that declare TOTALITY ("overall", "total", "outside", … — see
+    :func:`declares_totality`), e.g. "width (top view, overall horizontal)" or
+    "total_flange_width", but NOT feature-local sizes like "width (front view,
+    small feature)" — those would corrupt the envelope used for hole-centering,
+    feasibility checks and the built-model dimension check.
+
+    "total_*" joined the accepted set on 2026-08-16, for the same reason it wins
+    a dimension collision: a label saying "total" states that it measures the
+    whole extent. Before that, 16247's ``total_flange_width`` was not recognised
+    as an envelope dimension at all.
     """
     s = (label or "").lower().strip()
     token = canonicalize_applies_to(s)
     if token not in ("length", "width", "height"):
         return False
-    return s == token or "overall" in s
+    return s == token or declares_totality(s)
 
 
 class HoleType(str, Enum):
@@ -263,7 +270,8 @@ class HoleType(str, Enum):
     SPOTFACE = "spotface"
     TAPPED = "tapped"
     # Standard-fastener clearance hole (Phase 3c, 2026-07-24). The drill diameter
-    # comes from the ANSI Inch/Metric clearance table in hole_wizard_constants
+    # came from the ANSI Inch/Metric clearance table (removed with the
+    # HoleWizard path, 2026-08-16)
     # when a fastener size is named; additive — the wizard builder also INFERS a
     # clearance hole from a thru/blind callout that names a fastener, so old JSONs
     # without this member still route correctly.

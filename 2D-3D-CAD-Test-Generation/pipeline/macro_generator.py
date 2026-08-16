@@ -65,7 +65,7 @@ from pipeline.schema import (
     Units,
     collapse_dimension_values,
 )
-from utils.logger import get_logger
+from utils.logger import get_logger, warn_once
 
 log = get_logger()
 
@@ -256,7 +256,8 @@ def _dims_map(model: DrawingData, feature: Feature) -> dict[str, float]:
         items.append((key, d.applies_to or "", float(d.value)))
     out, notes = collapse_dimension_values(items)
     for note in notes:
-        log.debug("%s: colliding dimensions — %s", feature.id, note)
+        warn_once(log, f"dim-collision:{feature.id}:{note}",
+                  "%s: colliding dimensions — %s", feature.id, note)
     if feature.depth_dimension_id:
         d = model.dimension_by_id(feature.depth_dimension_id)
         if d is not None:

@@ -49,6 +49,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from pipeline.schema import DrawingData, Feature, FeatureType, collapse_dimension_values
+from utils.logger import warn_once
 
 log = logging.getLogger(__name__)
 
@@ -202,7 +203,11 @@ def _feature_dim_values(model: DrawingData, feature: Feature) -> dict[str, float
         items.append((key, d.applies_to or "", float(d.value)))
     out, notes = collapse_dimension_values(items)
     for note in notes:
-        log.warning("%s: colliding dimensions %s — %s", feature.id, ids, note)
+        # Reported ONCE per fact: this function is called several times per
+        # feature (base choice, sort key, disposition), and a collision is a
+        # property of the feature, not of the call.
+        warn_once(log, f"dim-collision:{feature.id}:{note}",
+                  "%s: colliding dimensions %s — %s", feature.id, ids, note)
     return out
 
 

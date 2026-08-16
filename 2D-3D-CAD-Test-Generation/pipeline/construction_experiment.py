@@ -148,7 +148,7 @@ def run_hole_experiment(tmp_dir: Path, *, cx=2.0, cy=1.0, dia=0.5,
                                      "sketch_circle_cut"))
     except Exception as e:
         res.trials.append(MethodTrial("sketch_circle_cut", "cadquery", False, False, str(e)))
-    # SolidWorks candidates (HoleWizard5 vs sketch cut) run only with a live app.
+    # SolidWorks candidates run only with a live app.
     if sw_app is not None:
         res.trials.extend(_sw_hole_trials(sw_app, plan, cx, cy, dia))
     res.decide()

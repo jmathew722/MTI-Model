@@ -20,9 +20,13 @@ class TestMethodsConfig:
         monkeypatch.setenv("MTI_METHOD_SLOT", "create_sketch_slot")
         assert method_for("slot") == "create_sketch_slot"
 
-    def test_hole_wizard_optin_wins(self, monkeypatch):
+    def test_the_removed_hole_wizard_flag_no_longer_changes_the_method(self, monkeypatch):
+        """MTI_ENABLE_HOLE_WIZARD used to route holes to hole_wizard5. That path
+        was removed 2026-08-16 after live verification on SolidWorks 2026
+        returned None for four parameter mappings; a stale flag in someone's
+        .env must now be inert, not select a method that no longer exists."""
         monkeypatch.setenv("MTI_ENABLE_HOLE_WIZARD", "1")
-        assert method_for("hole") == "hole_wizard5"
+        assert method_for("hole") == "sketch_circle_cut"
 
     def test_json_override(self, tmp_path, monkeypatch):
         # Point the config loader at a temp methods.json.

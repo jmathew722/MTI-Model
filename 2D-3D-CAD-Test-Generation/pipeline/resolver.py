@@ -1890,7 +1890,7 @@ def _callout_count_flags(resolved: dict) -> list[dict]:
     """CRITICAL flags where a hole callout's ``(N)`` multiplier disagrees with the
     number of hole positions actually dimensioned on the sheet (Phase 3d).
 
-    Uses the pure :func:`pipeline.hole_wizard.reconcile_callout_count`. Only fires
+    Uses the pure :func:`pipeline.callout_qty.reconcile_callout_count`. Only fires
     when EXPLICIT ``instance_positions`` exist and their count differs from
     ``qty`` — a deterministic drawing-vs-callout disagreement (the A050211E flange
     5-vs-6), never the "positions derived from a bolt-circle" case (where the

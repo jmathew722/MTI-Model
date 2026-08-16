@@ -79,6 +79,7 @@ _OPERATION_LABELS = {
     "slot2d": "Sketch slot",
     "create_sketch_slot": "Sketch slot",
     "capsule_profile": "Capsule slot",
+    # historic build plans only — the HoleWizard path was removed 2026-08-16
     "hole_wizard5": "HoleWizard",
 }
 _TYPE_LABELS = {
