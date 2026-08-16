@@ -20,6 +20,10 @@
 .DS_Store
 Thumbs.db
 reference/
+# ...except the pipeline reference doc set, which IS part of the repo
+# (docs/reference/: the 11 design docs + TRIAGE + INTEGRATION_PLAN).
+!2D-3D-CAD-Test-Generation/docs/reference/
+!2D-3D-CAD-Test-Generation/docs/reference/**
 
 # Accidental 1.4 GB nested repo copy (full checkout + venv/binaries) — never commit.
 MTI-Model_Joseph_Mathew/

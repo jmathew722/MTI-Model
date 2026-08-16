@@ -32,3 +32,6 @@ token_usage_log.jsonl
 Thumbs.db
 third_party/
 reference/
+# ...except docs/reference/, the pipeline reference doc set (in-repo).
+!docs/reference/
+!docs/reference/**
