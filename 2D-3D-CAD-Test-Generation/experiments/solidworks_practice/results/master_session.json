@@ -1,0 +1,275 @@
+{
+  "log": [
+    {
+      "step": "A: hole_LL",
+      "intended": {
+        "x": 0.75,
+        "y": 0.75,
+        "dia": 0.375
+      },
+      "measured": {
+        "x": 0.75,
+        "y": 0.75,
+        "dia": 0.375
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "A: hole_LR",
+      "intended": {
+        "x": 5.25,
+        "y": 0.75,
+        "dia": 0.375
+      },
+      "measured": {
+        "x": 5.25,
+        "y": 0.75,
+        "dia": 0.375
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "A: hole_UL",
+      "intended": {
+        "x": 0.75,
+        "y": 3.25,
+        "dia": 0.375
+      },
+      "measured": {
+        "x": 0.75,
+        "y": 3.25,
+        "dia": 0.375
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "A: hole_UR",
+      "intended": {
+        "x": 5.25,
+        "y": 3.25,
+        "dia": 0.375
+      },
+      "measured": {
+        "x": 5.25,
+        "y": 3.25,
+        "dia": 0.375
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "A: hole_CTR",
+      "intended": {
+        "x": 3.0,
+        "y": 2.0,
+        "dia": 0.75
+      },
+      "measured": {
+        "x": 3.0,
+        "y": 2.0,
+        "dia": 0.75
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "B: notch_LEFT",
+      "intended": {
+        "corner": [
+          -0.01,
+          1.5
+        ],
+        "size": [
+          0.5,
+          1.0
+        ],
+        "removes": 0.25
+      },
+      "measured": {
+        "removed_in3": 0.245,
+        "edge": "LEFT (x=0)",
+        "bbox": [
+          6.0,
+          4.0,
+          0.5
+        ]
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "B: notch_RIGHT",
+      "intended": {
+        "corner": [
+          5.51,
+          1.5
+        ],
+        "size": [
+          0.5,
+          1.0
+        ],
+        "removes": 0.25
+      },
+      "measured": {
+        "removed_in3": 0.245,
+        "edge": "RIGHT (x=W)",
+        "bbox": [
+          6.0,
+          4.0,
+          0.5
+        ]
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "B: notch_BOTTOM",
+      "intended": {
+        "corner": [
+          2.5,
+          -0.01
+        ],
+        "size": [
+          1.0,
+          0.5
+        ],
+        "removes": 0.25
+      },
+      "measured": {
+        "removed_in3": 0.245,
+        "edge": "BOTTOM (y=0)",
+        "bbox": [
+          6.0,
+          4.0,
+          0.5
+        ]
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "B: notch_TOP",
+      "intended": {
+        "corner": [
+          2.5,
+          3.51
+        ],
+        "size": [
+          1.0,
+          0.5
+        ],
+        "removes": 0.25
+      },
+      "measured": {
+        "removed_in3": 0.245,
+        "edge": "TOP (y=H)",
+        "bbox": [
+          6.0,
+          4.0,
+          0.5
+        ]
+      },
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "C: Front Plane",
+      "intended": {
+        "sketch_xy": [
+          1.25,
+          0.5
+        ]
+      },
+      "measured": {
+        "model_cyl_xy": [
+          1.25,
+          0.5
+        ],
+        "n_new_faces": 1
+      },
+      "ok": true,
+      "note": "CylinderParams x/y are MODEL X/Y \u2014 a hole drilled on a non-Front plane will not report the sketch coordinates"
+    },
+    {
+      "step": "C: Top Plane",
+      "intended": {
+        "sketch_xy": [
+          1.25,
+          0.5
+        ]
+      },
+      "measured": {
+        "model_cyl_xy": null,
+        "n_new_faces": 0
+      },
+      "ok": false,
+      "note": "no new face"
+    },
+    {
+      "step": "C: Right Plane",
+      "intended": {
+        "sketch_xy": [
+          1.25,
+          0.5
+        ]
+      },
+      "measured": {
+        "model_cyl_xy": null,
+        "n_new_faces": 0
+      },
+      "ok": false,
+      "note": "no new face"
+    }
+  ],
+  "final": {
+    "body_count": 1,
+    "bbox_in": [
+      6.0,
+      4.0,
+      0.5
+    ],
+    "com_in": [
+      3.0026,
+      2.0022,
+      0.25
+    ],
+    "volume_in3": 10.56251,
+    "area_in2": 58.0585,
+    "rebuild_clean": true
+  },
+  "holes": [
+    {
+      "x": 0.75,
+      "y": 0.75,
+      "dia": 0.375
+    },
+    {
+      "x": 0.75,
+      "y": 3.25,
+      "dia": 0.375
+    },
+    {
+      "x": 1.25,
+      "y": 0.5,
+      "dia": 0.2
+    },
+    {
+      "x": 3.0,
+      "y": 2.0,
+      "dia": 0.75
+    },
+    {
+      "x": 5.25,
+      "y": 0.75,
+      "dia": 0.375
+    },
+    {
+      "x": 5.25,
+      "y": 3.25,
+      "dia": 0.375
+    }
+  ]
+}

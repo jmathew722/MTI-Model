@@ -1,0 +1,3 @@
+# lab scratch: keep the reference parts, ignore SolidWorks lock/backup files
+~$*
+*.SLDPRT.bak

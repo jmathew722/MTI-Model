@@ -104,3 +104,50 @@ Feature methods get superseded (`FeatureExtrusion2`→`3`, `FeatureCut3`→`4`).
 in the product — this project live-verified that on SolidWorks 2026 and REMOVED
 its Hole Wizard path entirely; see `pipeline/experimental/README.md`. The
 plain-cut fallback doc 10 recommends is this pipeline's only hole method.
+
+---
+
+## Empirically discovered failure modes (hands-on lab, 2026-08-16)
+
+Found by running code against live SolidWorks 2026 rev 34.3.2, not by reading
+documentation. Lab notebook: `experiments/solidworks_practice/`; lessons:
+`docs/solidworks-lessons/`. **All four are SILENT** — the call returns an object
+and the model reports clean.
+
+### E012 — a guessed enum value deleted the entire solid
+**Symptom:** `FeatureCut4` returned a valid feature, `check_rebuild_errors`
+reported clean, and the part's volume went 12.0 in³ → 0. Body count stayed 1.
+**Cause:** `swEndCondThroughAllBoth` was assumed to be `7` from enum ordering. On
+this install it is **9**; `7` is `swEndCondUpToBody`, which with no body
+reference removes everything. (`swEndCondMidPlane` is likewise **6**, not 4.)
+**Fix:** resolve every enum through `_const("swEndCond…")` after connecting —
+never a literal, never an inferred ordinal. This is doc 03's "magic numbers for
+enums" anti-pattern with a measured consequence.
+
+### E013 — `None` for a VT_DISPATCH argument fails the whole call
+**Symptom:** every `SelectByID2` raised `Type mismatch (-2147352571)`; eight
+consecutive experiments failed before a single feature was created.
+**Cause:** the 8th argument is `VT_DISPATCH`. Python `None` marshals as
+`VT_EMPTY`, which SolidWorks rejects — even though the parameter is optional.
+**Fix:** pass `VARIANT(pythoncom.VT_DISPATCH, None)` —
+`solidworks_builder._null_dispatch()`.
+
+### E014 — clearing the selection between closing a sketch and cutting
+**Symptom:** `FeatureCut4` returned a feature; zero material was removed; the
+hole audit found no cylindrical faces. No error anywhere.
+**Cause:** closing a sketch with the second `InsertSketch(True)` leaves it
+SELECTED, and that selection is the profile the feature consumes. A
+`ClearSelection2(True)` before the feature call deselects it.
+**Fix:** close the sketch, then call the feature immediately. Do not clear the
+selection in between. (Distinct from E006: that one re-selects a closed sketch by
+name; this one clears a correct selection.)
+
+### E015 — a hole sketched on a non-Front plane silently misses the body
+**Symptom:** the same (x, y) that drills correctly on the Front Plane produced no
+cylindrical face and removed no material when sketched on the Top or Right plane.
+**Cause:** each sketch plane has its own 2-D frame; Front-Plane model coordinates
+do not transfer. The profile lands off the solid, the through-all cut finds
+nothing, and both direction flips return `None`.
+**Fix:** resolve the sketch-plane → model-axis mapping per plane before placing
+geometry; verify by measuring the resulting cylindrical face, not by the call's
+return value.

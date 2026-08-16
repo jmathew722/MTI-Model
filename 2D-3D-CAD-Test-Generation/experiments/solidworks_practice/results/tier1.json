@@ -1,0 +1,208 @@
+[
+  {
+    "name": "1.1 sketch primitives",
+    "ok": true,
+    "detail": "line, circle, center_rect, arc, centerline; GetSketchContours=4",
+    "measured": {
+      "contours": 4,
+      "line": true,
+      "circle": true,
+      "center_rect": true,
+      "arc": true,
+      "centerline": true
+    },
+    "error": ""
+  },
+  {
+    "name": "1.2 GetSketchContours closed vs open",
+    "ok": false,
+    "detail": "closed rectangle -> 1 contour(s); open 3-line -> 1",
+    "measured": {
+      "closed": 1,
+      "open": 1
+    },
+    "error": ""
+  },
+  {
+    "name": "1.3 extrude boss BLIND 0.5",
+    "ok": true,
+    "detail": "expected Z 0.5, measured 0.5; bodies 1, vol 6.0",
+    "measured": {
+      "body_count": 1,
+      "bbox_in": [
+        4.0,
+        3.0,
+        0.5
+      ],
+      "com_in": [
+        2.0,
+        1.5,
+        0.25
+      ],
+      "volume_in3": 6.0,
+      "area_in2": 31.0,
+      "rebuild_clean": true
+    },
+    "error": ""
+  },
+  {
+    "name": "1.4 extrude boss MIDPLANE 0.5",
+    "ok": true,
+    "detail": "expected Z 0.5, measured 0.5; bodies 1, vol 6.0",
+    "measured": {
+      "body_count": 1,
+      "bbox_in": [
+        4.0,
+        3.0,
+        0.5
+      ],
+      "com_in": [
+        2.0,
+        1.5,
+        0.0
+      ],
+      "volume_in3": 6.0,
+      "area_in2": 31.0,
+      "rebuild_clean": true
+    },
+    "error": ""
+  },
+  {
+    "name": "1.5 extrude boss BOTH dirs (dir2=0)",
+    "ok": true,
+    "detail": "expected Z 0.5, measured 0.5; bodies 1, vol 6.0",
+    "measured": {
+      "body_count": 1,
+      "bbox_in": [
+        4.0,
+        3.0,
+        0.5
+      ],
+      "com_in": [
+        2.0,
+        1.5,
+        -0.25
+      ],
+      "volume_in3": 6.0,
+      "area_in2": 31.0,
+      "rebuild_clean": true
+    },
+    "error": ""
+  },
+  {
+    "name": "1.6 extrude cut THROUGH-ALL",
+    "ok": false,
+    "detail": "removed 6.0000 in^3 (expected 0.0982); bodies 1",
+    "measured": {
+      "before": {
+        "body_count": 1,
+        "bbox_in": [
+          4.0,
+          3.0,
+          0.5
+        ],
+        "com_in": [
+          2.0,
+          1.5,
+          0.25
+        ],
+        "volume_in3": 6.0,
+        "area_in2": 31.0,
+        "rebuild_clean": true
+      },
+      "after": {
+        "body_count": 1,
+        "bbox_in": [
+          4.0,
+          3.0,
+          0.5
+        ],
+        "mass_error": "TypeError: 'NoneType' object is not iterable",
+        "rebuild_clean": true
+      }
+    },
+    "error": ""
+  },
+  {
+    "name": "1.7 constant fillet R.10 all edges",
+    "ok": true,
+    "detail": "12 edge(s) selected; volume 6.0 -> 5.93696",
+    "measured": {
+      "edges": 12,
+      "before": {
+        "body_count": 1,
+        "bbox_in": [
+          4.0,
+          3.0,
+          0.5
+        ],
+        "com_in": [
+          2.0,
+          1.5,
+          0.25
+        ],
+        "volume_in3": 6.0,
+        "area_in2": 31.0,
+        "rebuild_clean": true
+      },
+      "after": {
+        "body_count": 1,
+        "bbox_in": [
+          4.0,
+          3.0,
+          0.5
+        ],
+        "com_in": [
+          2.0,
+          1.5,
+          0.25
+        ],
+        "volume_in3": 5.93696,
+        "area_in2": 29.7011,
+        "rebuild_clean": true
+      }
+    },
+    "error": ""
+  },
+  {
+    "name": "1.8 chamfer 0.05 x 45deg all edges",
+    "ok": true,
+    "detail": "12 edge(s); volume 6.0 -> 5.96317",
+    "measured": {
+      "edges": 12,
+      "before": {
+        "body_count": 1,
+        "bbox_in": [
+          4.0,
+          3.0,
+          0.5
+        ],
+        "com_in": [
+          2.0,
+          1.5,
+          0.25
+        ],
+        "volume_in3": 6.0,
+        "area_in2": 31.0,
+        "rebuild_clean": true
+      },
+      "after": {
+        "body_count": 1,
+        "bbox_in": [
+          4.0,
+          3.0,
+          0.5
+        ],
+        "com_in": [
+          2.0,
+          1.5,
+          0.25
+        ],
+        "volume_in3": 5.96317,
+        "area_in2": 30.1138,
+        "rebuild_clean": true
+      }
+    },
+    "error": ""
+  }
+]

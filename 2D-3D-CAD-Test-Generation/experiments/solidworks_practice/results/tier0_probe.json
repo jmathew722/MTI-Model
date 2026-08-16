@@ -1,0 +1,127 @@
+[
+  {
+    "name": "0. API availability probe",
+    "ok": true,
+    "detail": "6/23 APIs resolve on this install",
+    "measured": {
+      "rows": [
+        [
+          "IBody2.GetMassProperties()",
+          "com_error",
+          "(-2147352561, 'Parameter not optional.', None, None)"
+        ],
+        [
+          "IBody2.GetMassProperties2(1)",
+          "AttributeError",
+          "GetBodies2.GetMassProperties2"
+        ],
+        [
+          "Extension.CreateMassProperty()",
+          "com_error",
+          "(-2147352573, 'Member not found.', None, None)"
+        ],
+        [
+          "Extension.GetMassProperties2(1,null,0)",
+          "com_error",
+          "(-2147352571, 'Type mismatch.', None, 2)"
+        ],
+        [
+          "IModelDoc2.GetMassProperties()",
+          "TypeError",
+          "'tuple' object is not callable"
+        ],
+        [
+          "IBody2.GetBodyBox()",
+          "OK",
+          "[0.0, 0.0, 0.0, 0.1016, 0.0762, 0.0127]"
+        ],
+        [
+          "IPartDoc.GetPartBox(True)",
+          "OK",
+          "[0.0, 0.0, 0.0, 0.1016, 0.0762, 0.0127]"
+        ],
+        [
+          "ISketch.GetSketchContours()",
+          "TypeError",
+          "'tuple' object is not callable"
+        ],
+        [
+          "ISketch.GetSketchSegments()",
+          "TypeError",
+          "'tuple' object is not callable"
+        ],
+        [
+          "ISketch.GetLineCount2(0)",
+          "OK",
+          "4"
+        ],
+        [
+          "IBody2.GetFaces()",
+          "OK",
+          "6"
+        ],
+        [
+          "IFace2.GetSurface()",
+          "com_error",
+          "(-2147352573, 'Member not found.', None, None)"
+        ],
+        [
+          "ISurface.IsCylinder()",
+          "com_error",
+          "(-2147352573, 'Member not found.', None, None)"
+        ],
+        [
+          "ISurface.IsPlane()",
+          "com_error",
+          "(-2147352573, 'Member not found.', None, None)"
+        ],
+        [
+          "IFace2.GetArea()",
+          "TypeError",
+          "'float' object is not callable"
+        ],
+        [
+          "IBody2.GetEdges()",
+          "OK",
+          "12"
+        ],
+        [
+          "IModelDoc2.ForceRebuild3(True)",
+          "OK",
+          "True"
+        ],
+        [
+          "IModelDoc2.GetRebuildErrorCount()",
+          "AttributeError",
+          "<unknown>.GetRebuildErrorCount"
+        ],
+        [
+          "IModelDoc2.FirstFeature() [method]",
+          "com_error",
+          "(-2147352573, 'Member not found.', None, None)"
+        ],
+        [
+          "IModelDoc2.FirstFeature [property]",
+          "TypeError",
+          "'str' object is not callable"
+        ],
+        [
+          "IFeature.GetErrorCode2()",
+          "com_error",
+          "(-2147352561, 'Parameter not optional.', None, None)"
+        ],
+        [
+          "IFeature.GetTypeName2()",
+          "TypeError",
+          "'str' object is not callable"
+        ],
+        [
+          "IFeature.GetNextFeature()",
+          "com_error",
+          "(-2147352573, 'Member not found.', None, None)"
+        ]
+      ]
+    },
+    "error": ""
+  }
+]

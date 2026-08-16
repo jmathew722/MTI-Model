@@ -1,0 +1,86 @@
+[
+  {
+    "name": "0b. property-vs-method rule",
+    "ok": true,
+    "detail": "12 members probed; mass-property tuple has 12 fields",
+    "measured": {
+      "rows": [
+        [
+          "IModelDoc2.GetMassProperties",
+          "OK -> (0.05079999999999999, 0.038099999999999995, 0.006349999999999999, 9.83",
+          "TypeError: 'tuple' object is not callable"
+        ],
+        [
+          "IModelDoc2.FirstFeature",
+          "callable (is a method)",
+          "com_error: (-2147352573, 'Member not found.', None, None)"
+        ],
+        [
+          "IBody2.GetFaces",
+          "callable (is a method)",
+          "OK -> (<COMObject GetFaces>, <COMObject GetFaces>, <COMObject GetFaces>, <CO"
+        ],
+        [
+          "IBody2.GetEdges",
+          "callable (is a method)",
+          "OK -> (<COMObject GetEdges>, <COMObject GetEdges>, <COMObject GetEdges>, <CO"
+        ],
+        [
+          "IBody2.Name",
+          "OK -> 'Boss-Extrude1'",
+          "TypeError: 'str' object is not callable"
+        ],
+        [
+          "IFace2.GetSurface",
+          "callable (is a method)",
+          "com_error: (-2147352573, 'Member not found.', None, None)"
+        ],
+        [
+          "IFace2.GetArea",
+          "OK -> 0.0009677399999999998",
+          "TypeError: 'float' object is not callable"
+        ],
+        [
+          "IFace2.GetEdgeCount",
+          "OK -> 4",
+          "TypeError: 'int' object is not callable"
+        ],
+        [
+          "ISurface.IsCylinder",
+          "OK -> False",
+          "TypeError: 'bool' object is not callable"
+        ],
+        [
+          "ISurface.IsPlane",
+          "OK -> True",
+          "TypeError: 'bool' object is not callable"
+        ],
+        [
+          "ISurface.CylinderParams",
+          "OK -> (6.9518172478973e-310, 2.1219796034e-314, 0.0, 0.0, 0.0, 0.0, 5.638322",
+          "TypeError: 'tuple' object is not callable"
+        ],
+        [
+          "ISurface.PlaneParams",
+          "OK -> (1.0, 0.0, 0.0, 0.0, 0.0, 0.0127)",
+          "TypeError: 'tuple' object is not callable"
+        ]
+      ],
+      "mass_properties": [
+        0.05079999999999999,
+        0.038099999999999995,
+        0.006349999999999999,
+        9.832238399999997e-05,
+        0.019999959999999997,
+        0.09832238399999997,
+        4.889678672235997e-05,
+        8.589976045819998e-05,
+        0.00013215347762799996,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    "error": ""
+  }
+]
