@@ -1,0 +1,521 @@
+{
+  "part": "A001551E",
+  "units": "inch",
+  "unit_factor_to_meters": 0.0254,
+  "coordinate_frame": {
+    "frame": "lower_left_corner",
+    "ground": "part outline lower-left",
+    "note": "default drawing-frame convention (no explicit origin found)"
+  },
+  "resolved_away": {},
+  "coordinate_origin": "lower_left_corner_of_base_solid",
+  "x_direction": "positive_right",
+  "y_direction": "positive_up",
+  "confidence": 0.82,
+  "audit": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "findings": []
+  },
+  "resolution_summary": {
+    "total_dimensions": 16,
+    "assumptions_made": 2,
+    "critical_flags": 2,
+    "low_flags": 0,
+    "medium_flags": 0,
+    "high_flags": 18,
+    "rebuild_confidence": 0.55,
+    "plain_english": "D015 decimal placement AMBIGUOUS among ['0.2575', '0.25']; plausibility could not separate them. Kept 0.2575 as a best guess and the dependent feature is excluded from the build (Tab-3 assumption) \u2014 confirm the value and re-run. 2 of 16 dimension(s) required an engineering assumption (2 critical, 0 low, 0 medium). Model is complete and buildable as-is; verify flagged items in SolidWorks."
+  },
+  "steps": [
+    {
+      "seq": 0,
+      "macro_file": "00_setup.vba",
+      "feature_id": "-",
+      "type": "setup",
+      "description": "New part, units, save-as",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 0,
+      "macro_file": "01a_reference_geometry.vba",
+      "feature_id": "-",
+      "type": "reference_geometry",
+      "description": "4 named datum landmark(s)",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 1,
+      "macro_file": "01_F001_Base_rectangular_plate_21_00_in_long_x_6.vba",
+      "feature_id": "F001",
+      "type": "extrude_boss",
+      "description": "Base rectangular plate \u2014 21.00 in long x 6.00 in tall x 0.50 in deep",
+      "status": "generated",
+      "dimensions_drawing_units": {
+        "length": 21.0,
+        "width": 6.0,
+        "depth": 0.5
+      },
+      "notes": "POSITION ASSUMED (drawing frame: rect corner at origin / circle at plate center) - verify against the drawing.",
+      "dimensions_meters": {
+        "length": 0.5334,
+        "width": 0.1524,
+        "depth": 0.0127
+      },
+      "positions_xy": [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "positions_xy_meters": [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "sketch_plane": "front",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 0.92,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0,
+      "positioned_from": "REF_DATUM_A",
+      "anchors": [
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "x",
+          "value": 0.0,
+          "semantics": "to_center"
+        },
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "y",
+          "value": 0.0,
+          "semantics": "to_center"
+        }
+      ],
+      "position_derivation": [
+        "x = origin(0) + 0(0) [coordinate]",
+        "y = origin(0) + 0(0) [coordinate]"
+      ]
+    },
+    {
+      "seq": 2,
+      "macro_file": "02_F003_2x_center_vertical_slot_cutouts_0_515_wi.vba",
+      "feature_id": "F003",
+      "type": "extrude_cut",
+      "description": "2x center vertical slot cutouts \u2014 0.515 wide x 3.63 tall, R. TYP ends, THRU; at x=7.50 and x=13.50, 0.187 from bottom",
+      "status": "generated",
+      "dimensions_drawing_units": {
+        "length": 2.37,
+        "width": 3.63,
+        "depth": 3.63
+      },
+      "notes": "Position read from drawing.",
+      "dimensions_meters": {
+        "length": 0.060198,
+        "width": 0.092202,
+        "depth": 0.092202
+      },
+      "positions_xy": [
+        [
+          7.5,
+          0.187
+        ]
+      ],
+      "positions_xy_meters": [
+        [
+          0.1905,
+          0.0047498
+        ]
+      ],
+      "sketch_plane": "front",
+      "parent_feature_id": "F001",
+      "depth_type": "blind",
+      "flags": [
+        {
+          "dimension_id": "D900",
+          "flag_tier": "CRITICAL",
+          "human_note": "F003 length=2.37 inch DERIVED from the outer profile (envelope height 6 \u2212 partial 3.63); no feature-local length callout. Verify.",
+          "macro_behavior": "confirm_on_run"
+        }
+      ],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": true,
+      "assumption_confidence": 0.5,
+      "flag_tier": "CRITICAL",
+      "position_source": "",
+      "position_confidence": 0.0,
+      "construction_method": "sketch_rect_cut",
+      "positioned_from": "REF_PT_F003",
+      "anchors": [
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "x",
+          "value": 7.5,
+          "semantics": "to_center"
+        },
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "y",
+          "value": 0.187,
+          "semantics": "to_center"
+        }
+      ],
+      "position_derivation": [
+        "x = origin(0) + 7.5(7.5) [coordinate]",
+        "y = origin(0) + 0.187(0.187) [coordinate]"
+      ]
+    },
+    {
+      "seq": 3,
+      "macro_file": "03_F002_4x_corner_oval_slot_cutouts_0_515_wide_x.vba",
+      "feature_id": "F002",
+      "type": "extrude_cut",
+      "description": "4x corner oval slot cutouts \u2014 0.515 wide x 1.00 long, R. TYP ends, THRU; 0.75 from left/right edges, 1.00 from bottom, 4.000 \u00b10.005 vertical c-c",
+      "status": "generated",
+      "dimensions_drawing_units": {
+        "length": 1.0,
+        "width": 0.515
+      },
+      "notes": "Position read from drawing.",
+      "dimensions_meters": {
+        "length": 0.0254,
+        "width": 0.013081
+      },
+      "positions_xy": [
+        [
+          0.75,
+          1.0
+        ]
+      ],
+      "positions_xy_meters": [
+        [
+          0.01905,
+          0.0254
+        ]
+      ],
+      "sketch_plane": "front",
+      "parent_feature_id": "F001",
+      "depth_type": "through_all",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 0.92,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0,
+      "construction_method": "sketch_rect_cut",
+      "positioned_from": "REF_PT_F002",
+      "anchors": [
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "x",
+          "value": 0.75,
+          "semantics": "to_center"
+        },
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "y",
+          "value": 1.0,
+          "semantics": "to_center"
+        }
+      ],
+      "position_derivation": [
+        "x = origin(0) + 0.75(0.75) [coordinate]",
+        "y = origin(0) + 1(1) [coordinate]"
+      ]
+    },
+    {
+      "seq": 999,
+      "macro_file": "ZZ_final_verify.vba",
+      "feature_id": "-",
+      "type": "verify",
+      "description": "Rebuild, mass properties, bounding box, save",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 1001,
+      "macro_file": "ZZZ_export_stl.vba",
+      "feature_id": "-",
+      "type": "export",
+      "description": "Export the part as an STL beside the .sldprt (same base name)",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 1000,
+      "macro_file": "RUN_ALL.vba",
+      "feature_id": "-",
+      "type": "run_all",
+      "description": "One macro that runs every step in order (paste once, F5)",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "Single-run alternative to the numbered macros. Fillets/chamfers still need interactive edge selection.",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    }
+  ],
+  "skipped_prohibited": [],
+  "needs_review": [],
+  "dispositions": [
+    {
+      "feature_id": "F001",
+      "type": "extrude_boss",
+      "stage": 1,
+      "stage_name": "base_solid",
+      "state": "BUILT",
+      "values_used": {
+        "length": 21.0,
+        "height": 6.0,
+        "thickness": 0.5
+      },
+      "derivation_source": "",
+      "position_xy": [
+        0.0,
+        0.0
+      ],
+      "flags": []
+    },
+    {
+      "feature_id": "F002",
+      "type": "extrude_cut",
+      "stage": 3,
+      "stage_name": "profile_subtractions",
+      "state": "BUILT",
+      "values_used": {
+        "width": 0.515,
+        "spacing": 4.0,
+        "corner_slot_bottom_offset": 1.0,
+        "corner_slot_left_edge_offset": 0.75,
+        "length": 1.0
+      },
+      "derivation_source": "",
+      "position_xy": [
+        0.75,
+        1.0
+      ],
+      "flags": []
+    },
+    {
+      "feature_id": "F003",
+      "type": "extrude_cut",
+      "stage": 3,
+      "stage_name": "profile_subtractions",
+      "state": "BUILT_WITH_DERIVED_VALUE",
+      "values_used": {
+        "horizontal_offset_to_first_center_slot_pair": 7.5,
+        "spacing": 6.0,
+        "width": 0.515,
+        "height": 3.63,
+        "center_slot_bottom_offset": 0.187,
+        "length": 2.37
+      },
+      "derivation_source": "profile_delta",
+      "position_xy": [
+        7.5,
+        0.187
+      ],
+      "flags": []
+    },
+    {
+      "feature_id": "F004",
+      "type": "fillet",
+      "stage": 6,
+      "stage_name": "edge_treatments",
+      "state": "EXCLUDED_INCOMPLETE",
+      "values_used": {
+        "radius": 0.2575
+      },
+      "derivation_source": "",
+      "position_xy": [
+        0.0,
+        0.0
+      ],
+      "flags": [
+        {
+          "dimension_id": "F004",
+          "feature_id": "F004",
+          "flag_tier": "CRITICAL",
+          "human_note": "EXCLUDED FROM BUILD \u2014 fillet F004 is missing radius. No value was read, and none could be derived from the constraint graph, a TYP sibling, or a standard size. Rather than emit a build step that fails or places wrong geometry, F004 was left OUT of the model and recorded as a model-derived assumption in Tab 3. Expected on host feature F002. Add the missing value on the drawing and re-run to include this feature.",
+          "macro_behavior": "confirm_on_run",
+          "resolved_by_tier": "tier1_per_view",
+          "source": "missing_dimension",
+          "excluded_from_build": true,
+          "model_derived_assumption": true,
+          "expected_region": {
+            "kind": "on_parent",
+            "parent_feature": "F002"
+          },
+          "route_to_markup": true
+        }
+      ]
+    }
+  ],
+  "reference_geometry": [
+    {
+      "id": "REF_DATUM_A",
+      "type": "plane",
+      "definition": "coincident",
+      "source": "base datum (part origin)",
+      "parent": "Front Plane"
+    },
+    {
+      "id": "REF_SYM_Y",
+      "type": "plane",
+      "definition": "coincident",
+      "source": "symmetry plane (Front \u2014 vertical centerline (X = 10.50 in))",
+      "parent": "Front Plane"
+    },
+    {
+      "id": "REF_PT_F002",
+      "type": "point",
+      "definition": "plane_plane_plane",
+      "source": "pattern origin (H001, 4 instances)",
+      "parents": [
+        "REF_DATUM_A"
+      ]
+    },
+    {
+      "id": "REF_PT_F003",
+      "type": "point",
+      "definition": "plane_plane_plane",
+      "source": "pattern origin (H002, 2 instances)",
+      "parents": [
+        "REF_DATUM_A"
+      ]
+    }
+  ],
+  "engineering_review": [
+    {
+      "severity": "CRITICAL",
+      "source": "dimension",
+      "id": "D015",
+      "what": "D015 decimal placement AMBIGUOUS among ['0.2575', '0.25']; plausibility could not separate them. Kept 0.2575 as a best guess and the dependent feature is excluded from the build (Tab-3 assumption) \u2014 confirm the value and re-run.",
+      "decision": "resolved value 0.2575",
+      "why": "ambiguous multi candidate",
+      "affects": "dimension D015"
+    },
+    {
+      "severity": "CRITICAL",
+      "source": "dimension",
+      "id": "D900",
+      "what": "F003 length=2.37 inch DERIVED from the outer profile (envelope height 6 \u2212 partial 3.63); no feature-local length callout. Verify.",
+      "decision": "resolved value 2.37",
+      "why": "profile delta",
+      "affects": "dimension D900"
+    }
+  ]
+}

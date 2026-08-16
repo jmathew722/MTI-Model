@@ -63,6 +63,7 @@ from pipeline.schema import (
     HoleType,
     PatternKind,
     Units,
+    collapse_dimension_values,
 )
 from utils.logger import get_logger
 
@@ -231,11 +232,19 @@ def _v(value: float) -> str:
 
 
 def _dims_map(model: DrawingData, feature: Feature) -> dict[str, float]:
-    """Feature's dimensions in DRAWING units, keyed by applies_to (or type)."""
-    out: dict[str, float] = {}
+    """Feature's dimensions in DRAWING units, keyed by applies_to (or type).
+
+    Canonical-key collisions are settled by the ONE shared policy in
+    :func:`pipeline.schema.collapse_dimension_values` — the same rule the build
+    sequencer uses. This function used to resolve them itself with a bare
+    ``setdefault`` (first wins), which silently disagreed with the sequencer's
+    rule and, on 16247, kept ``flange_width`` (1.0) over ``total_flange_width``
+    (2.0) and emitted a base solid half the drawing's width.
+    """
     ids = list(feature.related_dimensions)
     if feature.depth_dimension_id and feature.depth_dimension_id not in ids:
         ids.append(feature.depth_dimension_id)
+    items: list[tuple[str, str, float]] = []
     for did in ids:
         d = model.dimension_by_id(did)
         if d is None:
@@ -244,7 +253,10 @@ def _dims_map(model: DrawingData, feature: Feature) -> dict[str, float]:
         # "thru hole diameter (4 places)" still resolves to "hole_diameter"; fall
         # back to the dimension type. Fixes failure class E010.
         key = d.canonical_applies_to or (d.applies_to or d.type.value).lower().strip()
-        out.setdefault(key, d.value)
+        items.append((key, d.applies_to or "", float(d.value)))
+    out, notes = collapse_dimension_values(items)
+    for note in notes:
+        log.debug("%s: colliding dimensions — %s", feature.id, note)
     if feature.depth_dimension_id:
         d = model.dimension_by_id(feature.depth_dimension_id)
         if d is not None:
@@ -433,6 +445,34 @@ def _hole_group_features(model: DrawingData, feature: Feature) -> list[Feature]:
             and abs(_hole_diameter_of(model, f) - dia) < 1e-4]
 
 
+def _shares_callout_siblings(model: DrawingData, feature: Feature) -> list[Feature]:
+    """Same-diameter sibling features that could be OTHER INSTANCES OF THIS
+    FEATURE'S CALLOUT — i.e. siblings with no callout of their own.
+
+    Diameter alone is not enough to say two features are instances of one
+    callout (A001271E, 2026-08-16). That plate has TWO independent .531 groups —
+    4 corner holes (H001) and 4 inner holes (H002) — each with its own callout
+    carrying its own complete ``instance_positions``. Grouping them by diameter
+    made each feature look like a single instance of a shared layout, so both
+    fell through to their (0, 0) feature offset and the overlap guard correctly
+    refused the build: two holes drilled on top of each other at the origin.
+
+    A sibling is only a candidate instance of *this* callout when it does not own
+    a different callout. Two features that each carry their own dimensioned
+    callout are two groups that merely share a drill size.
+    """
+    own = model.hole_callout_for_feature(feature.id)
+    out = []
+    for f in _hole_group_features(model, feature):
+        if f.id == feature.id:
+            out.append(f)
+            continue
+        sibling_callout = model.hole_callout_for_feature(f.id)
+        if sibling_callout is None or (own is not None and sibling_callout.id == own.id):
+            out.append(f)          # shares this callout -> a possible instance
+    return out
+
+
 def is_verified_pattern(model: DrawingData, h: Optional[HoleCallout]) -> tuple[bool, str]:
     """A hole callout is a VERIFIED REGULAR PATTERN (may share placement logic)
     only with hard evidence: a bolt-circle diameter, or a linear/generic pattern
@@ -458,12 +498,16 @@ def _hole_feature_positions(model: DrawingData, feature: Feature) -> list[tuple[
     siblings ARE the other instances — this feature owns exactly ONE of them
     (its own resolved position), never the whole multi-instance layout (which
     would drill duplicates on top of the siblings). Only a VERIFIED regular
-    pattern with a single owning feature lays out multiple instances here."""
+    pattern with a single owning feature lays out multiple instances here.
+
+    Sibling-hood is decided by :func:`_shares_callout_siblings`, NOT by diameter
+    alone: a same-diameter feature that owns its own dimensioned callout is a
+    separate group, not another instance of this one."""
     h = model.hole_callout_for_feature(feature.id)
     is_pat, _ev = is_verified_pattern(model, h)
     if h is not None and is_pat:
         return _hole_positions(model, h)  # genuine pattern -> full layout
-    group = _hole_group_features(model, feature)
+    group = _shares_callout_siblings(model, feature)
     # Case A: this feature is the SOLE feature for its callout — it owns every
     # explicitly-dimensioned instance the callout carries.
     if h is not None and h.instance_positions and len(group) <= 1:

@@ -152,6 +152,41 @@ class FeatureRecord:
     def sort_history(self) -> None:
         self.history.sort(key=lambda e: _stage_rank(e.stage))
 
+    def merge_duplicates(self) -> None:
+        """Collapse the same fact reported by two artifacts into one entry.
+
+        Several stages write the SAME state to more than one file — a pending
+        assist question appears both as the ``NEEDS_HUMAN_INPUT`` overlay on the
+        disposition table and as the question in the assist queue. That is one
+        fact with two sources, not two events, and listing it twice makes a
+        feature's history read as if something happened twice.
+
+        Rule: within one stage, one entry per distinct status. The RICHEST entry
+        wins (longest detail — the assist queue's actual question beats the
+        overlay's bare marker) and every contributing artifact is preserved in
+        ``source`` so nothing about provenance is lost. Genuinely repeated events
+        keep their own entries, because they differ in status or stage (a retry
+        that fails then recovers, for example).
+        """
+        best: dict[tuple[str, str], LedgerEntry] = {}
+        order: list[tuple[str, str]] = []
+        for e in self.history:
+            key = (e.stage, e.status)
+            cur = best.get(key)
+            if cur is None:
+                best[key] = e
+                order.append(key)
+                continue
+            winner, loser = (e, cur) if len(e.detail) > len(cur.detail) else (cur, e)
+            sources = [s for s in (winner.source, loser.source) if s]
+            winner.source = " + ".join(dict.fromkeys(sources))
+            if not winner.basis and loser.basis:
+                winner.basis = loser.basis
+            for k, v in (loser.data or {}).items():
+                winner.data.setdefault(k, v)
+            best[key] = winner
+        self.history = [best[k] for k in order]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "feature_id": self.feature_id,
@@ -224,6 +259,7 @@ class FeatureLedger:
     def finalize(self) -> "FeatureLedger":
         for rec in self.features.values():
             rec.sort_history()
+            rec.merge_duplicates()
         return self
 
     def to_dict(self) -> dict[str, Any]:
@@ -258,6 +294,21 @@ def _first(out: Path, pattern: str, exclude: tuple[str, ...] = ()) -> Optional[P
     return None
 
 
+def _artifact(out: Path, *patterns: str) -> Optional[Path]:
+    """First matching artifact across several naming conventions.
+
+    The vision pipeline prefixes artifacts with the part name
+    (``158-C_build_plan.json``); the DWG-native pipeline writes them bare
+    (``build_plan.json``). Both are first-class products (docs/DWG_PATHS.md), so
+    the ledger reads both rather than being a vision-only view.
+    """
+    for pat in patterns:
+        hit = _first(out, pat)
+        if hit is not None:
+            return hit
+    return None
+
+
 def build_ledger(output_dir: Path | str, part: str = "") -> FeatureLedger:
     """Assemble the ledger for one part's output directory.
 
@@ -269,8 +320,9 @@ def build_ledger(output_dir: Path | str, part: str = "") -> FeatureLedger:
     out = Path(output_dir)
     ledger = FeatureLedger(part=part or out.name)
 
-    plan = _load(_first(out, "*_build_plan.json")) or {}
-    dispositions = _load(_first(out, "*_build_dispositions.json"))
+    plan = _load(_artifact(out, "*_build_plan.json", "build_plan.json")) or {}
+    dispositions = _load(_artifact(out, "*_build_dispositions.json",
+                                   "build_dispositions.json"))
     if not isinstance(dispositions, list):
         dispositions = plan.get("dispositions") if isinstance(plan, dict) else None
     if not isinstance(dispositions, list):
@@ -342,14 +394,22 @@ def build_ledger(output_dir: Path | str, part: str = "") -> FeatureLedger:
         ledger.sources.append("deferred_log")
 
     # 10.5 — reconciliation: only the unresolved items are per-feature.
-    recon = _load(_first(out, "*_reconciliation_report.json")) or {}
+    recon = _load(_artifact(out, "*_reconciliation_report.json")) or {}
     for u in (recon.get("unresolved") or []):
         fid = u.get("feature_id")
         if not fid:
             continue
+        # `issue` is the field the reconciler actually writes (verified against
+        # real reports, 2026-08-16) — it carries the finding ("extraction
+        # describes 4 instance(s) but only 1 made it into the build plan"), which
+        # is the useful half; `resolution_attempted` is the fallback narrative.
         ledger.record(fid, STAGE_RECONCILE, u.get("status") or "unresolved",
-                      detail=u.get("reason") or u.get("resolution_attempted") or "",
-                      source="reconciliation_report.json")
+                      detail=u.get("issue") or u.get("reason")
+                      or u.get("resolution_attempted") or "",
+                      feature_type=u.get("feature_type") or "",
+                      source="reconciliation_report.json",
+                      data={"resolution_attempted": u.get("resolution_attempted")}
+                      if u.get("issue") and u.get("resolution_attempted") else {})
     for fid in (recon.get("splices_applied") or []):
         ledger.record(fid, STAGE_RECONCILE, "spliced",
                       detail="recovered by re-resolution and spliced into the build plan",
@@ -358,7 +418,7 @@ def build_ledger(output_dir: Path | str, part: str = "") -> FeatureLedger:
         ledger.sources.append("reconciliation_report")
 
     # 10.6 — per-feature geometric verification.
-    fverify = _load(_first(out, "*_feature_verification.json")) or {}
+    fverify = _load(_artifact(out, "*_feature_verification.json")) or {}
     for fv in (fverify.get("features") or []):
         fid = fv.get("feature_id") or fv.get("id")
         if not fid:
@@ -375,7 +435,7 @@ def build_ledger(output_dir: Path | str, part: str = "") -> FeatureLedger:
         ledger.sources.append("feature_verification")
 
     # 10.7 — geometric correction loop.
-    loop = _load(_first(out, "*_geometric_loop_report.json")) or {}
+    loop = _load(_artifact(out, "*_geometric_loop_report.json")) or {}
     for u in (loop.get("unresolved") or []):
         fid = u.get("feature_id")
         if not fid:
@@ -387,7 +447,7 @@ def build_ledger(output_dir: Path | str, part: str = "") -> FeatureLedger:
         ledger.sources.append("geometric_loop_report")
 
     # 10.8 — human-assist questions.
-    assist = _load(_first(out, "*_assist_queue.json")) or {}
+    assist = _load(_artifact(out, "*_assist_queue.json")) or {}
     for q in (assist.get("questions") or []):
         fid = q.get("feature_id")
         if not fid:

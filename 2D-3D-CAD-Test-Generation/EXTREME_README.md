@@ -1072,6 +1072,25 @@ vs the build; `check_hole_counts`, `check_correspondences`,
 for the Stage 1.5 WORDS vs the macro package. Advisory by default in both halves;
 strict is opt-in. Report artifacts are unchanged.
 
+### `schema.collapse_dimension_values` — the dimension-collision policy
+When two of a feature's dimensions canonicalize to the same key, **first-declared
+wins unless a label declares TOTALITY** (`overall_*`, `total_*`, `outside_*`, …),
+because such a label states in the drawing's own words that it measures the whole
+extent. Not a magnitude heuristic — a *smaller* total still wins. Every collision
+is reported, never silently resolved. This rule had THREE implementations
+(`build_sequencer._feature_dim_values`, `macro_generator._dims_map`,
+`solidworks_builder.get_dimensions_for_feature`); the COM one used a bare
+`setdefault` and built 16247's base solid 1.0 wide while the plan, the VBA and
+CadQuery all said 2.0. One owner now, used by all three (2026-08-16).
+
+### `solidworks_builder.resolve_part_template` — surviving a SolidWorks upgrade
+Template resolution order: the configured `SOLIDWORKS_TEMPLATE_PATH` **if it
+exists** → SolidWorks' own default-template preference → a filesystem search
+(newest version, plainly-named template preferred). A configured-but-missing path
+is a stale setting, reported and skipped, not a hard failure: pinned to a 2024
+path on a machine upgraded to 2026, it failed EVERY COM build while a good
+template sat on disk.
+
 ### `pipeline/dwg_routing.py` — which DWG path (§1.6)
 `route_for(path, entry_point=…)` is the single answer, with the full decision in
 `docs/DWG_PATHS.md`: `dwg_native/` is a permanent second product (entities are

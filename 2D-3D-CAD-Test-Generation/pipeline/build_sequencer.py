@@ -48,7 +48,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from pipeline.schema import DrawingData, Feature, FeatureType
+from pipeline.schema import DrawingData, Feature, FeatureType, collapse_dimension_values
 
 log = logging.getLogger(__name__)
 
@@ -177,24 +177,32 @@ def _feature_dim_values(model: DrawingData, feature: Feature) -> dict[str, float
     last, after the feature's primary dims) — the drawing's own declared
     linking order is a principled choice, "biggest number" is not. A genuine
     collision (two DIFFERENT dimension ids mapping to the same key) is logged
-    so it stays visible rather than silently resolved either way."""
-    out: dict[str, float] = {}
+    so it stays visible rather than silently resolved either way.
+
+    2026-08-16 refinement (live COM build of 16247, which came out HALF WIDTH):
+    first-declared is the right *default*, but it discards a stronger signal the
+    drawing already gives — the label itself. ``total_flange_width`` (2.0) and
+    ``flange_width`` (1.0) both canonicalize to "width"; first-declared kept the
+    COMPONENT, so the base solid was built 1.0 wide instead of 2.0 and every
+    downstream check measured a part half the drawing's size. A label that
+    declares totality ("overall", "total", …) names the whole extent by
+    definition, so it wins the collision. This is still reading the drawing's own
+    words — not "biggest number wins": a total that reads SMALLER than a
+    component would still win, and the disagreement is logged either way.
+    """
     ids = list(feature.related_dimensions or [])
     if feature.depth_dimension_id:
         ids.append(feature.depth_dimension_id)
+    items: list[tuple[str, str, float]] = []
     for did in ids:
         d = model.dimension_by_id(did)
         if d is None:
             continue
         key = d.canonical_applies_to or (d.applies_to or "").strip().lower()
-        if not key:
-            continue
-        if key not in out:
-            out[key] = float(d.value)
-        elif out[key] != float(d.value):
-            log.warning("%s: dimensions %s both canonicalize to %r (%.6g vs %.6g) — "
-                       "keeping the FIRST-declared value.",
-                       feature.id, ids, key, out[key], float(d.value))
+        items.append((key, d.applies_to or "", float(d.value)))
+    out, notes = collapse_dimension_values(items)
+    for note in notes:
+        log.warning("%s: colliding dimensions %s — %s", feature.id, ids, note)
     return out
 
 

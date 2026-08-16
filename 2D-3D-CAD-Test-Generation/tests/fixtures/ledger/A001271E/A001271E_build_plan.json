@@ -1,0 +1,584 @@
+{
+  "part": "A001271E",
+  "units": "inch",
+  "unit_factor_to_meters": 0.0254,
+  "coordinate_frame": {
+    "frame": "lower_left_corner",
+    "ground": "part outline lower-left",
+    "note": "default drawing-frame convention (no explicit origin found)"
+  },
+  "resolved_away": {},
+  "coordinate_origin": "lower_left_corner_of_base_solid",
+  "x_direction": "positive_right",
+  "y_direction": "positive_up",
+  "confidence": 0.82,
+  "audit": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "findings": []
+  },
+  "resolution_summary": {
+    "total_dimensions": 15,
+    "assumptions_made": 0,
+    "critical_flags": 0,
+    "low_flags": 0,
+    "medium_flags": 0,
+    "high_flags": 18,
+    "rebuild_confidence": 0.92,
+    "plain_english": "All dimensions confirmed by arithmetic chain or explicit callout. Model is complete and buildable as-is."
+  },
+  "steps": [
+    {
+      "seq": 0,
+      "macro_file": "00_setup.vba",
+      "feature_id": "-",
+      "type": "setup",
+      "description": "New part, units, save-as",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 0,
+      "macro_file": "01a_reference_geometry.vba",
+      "feature_id": "-",
+      "type": "reference_geometry",
+      "description": "4 named datum landmark(s)",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 1,
+      "macro_file": "01_F001_Base_rectangular_plate_17_50_x_11_25_x_1.vba",
+      "feature_id": "F001",
+      "type": "extrude_boss",
+      "description": "Base rectangular plate 17.50 x 11.25 x 1.00 thick",
+      "status": "generated",
+      "dimensions_drawing_units": {
+        "length": 17.5,
+        "width": 11.25,
+        "depth": 1.0
+      },
+      "notes": "POSITION ASSUMED (drawing frame: rect corner at origin / circle at plate center) - verify against the drawing.",
+      "dimensions_meters": {
+        "length": 0.4445,
+        "width": 0.28575,
+        "depth": 0.0254
+      },
+      "positions_xy": [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "positions_xy_meters": [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "sketch_plane": "front",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 0.92,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0,
+      "positioned_from": "REF_DATUM_A",
+      "anchors": [
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "x",
+          "value": 0.0,
+          "semantics": "to_center"
+        },
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "y",
+          "value": 0.0,
+          "semantics": "to_center"
+        }
+      ],
+      "position_derivation": [
+        "x = origin(0) + 0(0) [coordinate]",
+        "y = origin(0) + 0(0) [coordinate]"
+      ]
+    },
+    {
+      "seq": 2,
+      "macro_file": "02_F003_Inner_pattern_of_4_through_drilled_531_h.vba",
+      "feature_id": "F003",
+      "type": "hole",
+      "description": "Inner pattern of 4 through drilled .531 holes",
+      "status": "generated",
+      "dimensions_drawing_units": {
+        "diameter": 0.531,
+        "qty": 4.0
+      },
+      "notes": "Hole positions read from drawing.",
+      "dimensions_meters": {
+        "diameter": 0.0134874,
+        "qty": 4.0
+      },
+      "positions_xy": [
+        [
+          7.625,
+          4.5
+        ],
+        [
+          14.625,
+          4.5
+        ],
+        [
+          7.625,
+          10.5
+        ],
+        [
+          14.625,
+          10.5
+        ]
+      ],
+      "positions_xy_meters": [
+        [
+          0.193675,
+          0.1143
+        ],
+        [
+          0.371475,
+          0.1143
+        ],
+        [
+          0.193675,
+          0.2667
+        ],
+        [
+          0.371475,
+          0.2667
+        ]
+      ],
+      "sketch_plane": "front",
+      "parent_feature_id": "F001",
+      "depth_type": "through_all",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 0.92,
+      "flag_tier": "HIGH",
+      "position_source": "vision",
+      "position_confidence": 0.0,
+      "construction_method": "sketch_circle_cut",
+      "positioned_from": "REF_PT_F003",
+      "placement": "individual",
+      "pattern_evidence": "none->individual",
+      "position_basis": [
+        {
+          "anchor": "origin",
+          "dim": "D007",
+          "value": 6.25,
+          "axis": "y"
+        },
+        {
+          "anchor": "hole_center",
+          "dim": "D008",
+          "value": 6.0,
+          "axis": "y"
+        },
+        {
+          "anchor": "origin",
+          "dim": "D009",
+          "value": 6.5,
+          "axis": "y"
+        },
+        {
+          "anchor": "hole_center",
+          "dim": "D010",
+          "value": 6.781,
+          "axis": "x"
+        },
+        {
+          "anchor": "hole_center",
+          "dim": "D011",
+          "value": 0.5,
+          "axis": "x"
+        },
+        {
+          "anchor": "hole_center",
+          "dim": "D012",
+          "value": 7.0,
+          "axis": "x"
+        }
+      ],
+      "datum_points": [
+        "REF_PT_F003"
+      ],
+      "anchors": [
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "x",
+          "value": 0.0,
+          "semantics": "to_center"
+        },
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "y",
+          "value": 0.0,
+          "semantics": "to_center"
+        }
+      ],
+      "position_derivation": [
+        "x = origin(0) + 0(0) [coordinate]",
+        "y = origin(0) + 0(0) [coordinate]"
+      ]
+    },
+    {
+      "seq": 3,
+      "macro_file": "03_F002_Corner_counterbored_clearance_holes_for_.vba",
+      "feature_id": "F002",
+      "type": "hole",
+      "description": "Corner counterbored clearance holes for .500 socket head cap screws, 4 places",
+      "status": "generated",
+      "dimensions_drawing_units": {
+        "diameter": 0.531,
+        "qty": 4.0,
+        "cbore_diameter": 0.75,
+        "cbore_depth": 0.3
+      },
+      "notes": "Hole positions read from drawing.",
+      "dimensions_meters": {
+        "diameter": 0.0134874,
+        "qty": 4.0,
+        "cbore_diameter": 0.01905,
+        "cbore_depth": 0.00762
+      },
+      "positions_xy": [
+        [
+          0.844,
+          10.5
+        ],
+        [
+          16.656,
+          10.5
+        ],
+        [
+          0.844,
+          0.75
+        ],
+        [
+          16.656,
+          0.75
+        ]
+      ],
+      "positions_xy_meters": [
+        [
+          0.0214376,
+          0.2667
+        ],
+        [
+          0.4230624,
+          0.2667
+        ],
+        [
+          0.0214376,
+          0.01905
+        ],
+        [
+          0.4230624,
+          0.01905
+        ]
+      ],
+      "sketch_plane": "front",
+      "parent_feature_id": "F001",
+      "depth_type": "through_all",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 0.92,
+      "flag_tier": "HIGH",
+      "position_source": "vision",
+      "position_confidence": 0.0,
+      "construction_method": "sketch_circle_cut",
+      "positioned_from": "REF_PT_F002",
+      "placement": "individual",
+      "pattern_evidence": "none->individual",
+      "position_basis": [
+        {
+          "anchor": "hole_center",
+          "dim": "D002",
+          "value": 15.812,
+          "axis": "x"
+        },
+        {
+          "anchor": "origin",
+          "dim": "D003",
+          "value": 0.844,
+          "axis": "x"
+        },
+        {
+          "anchor": "origin",
+          "dim": "D004",
+          "value": 0.75,
+          "axis": "y"
+        },
+        {
+          "anchor": "hole_center",
+          "dim": "D006",
+          "value": 14.0,
+          "axis": "y"
+        }
+      ],
+      "datum_points": [
+        "REF_PT_F002"
+      ],
+      "anchors": [
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "x",
+          "value": 0.0,
+          "semantics": "to_center"
+        },
+        {
+          "scheme": "coordinate",
+          "anchor_ref": "origin",
+          "dimension_ids": [],
+          "axis": "y",
+          "value": 0.0,
+          "semantics": "to_center"
+        }
+      ],
+      "position_derivation": [
+        "x = origin(0) + 0(0) [coordinate]",
+        "y = origin(0) + 0(0) [coordinate]"
+      ]
+    },
+    {
+      "seq": 999,
+      "macro_file": "ZZ_final_verify.vba",
+      "feature_id": "-",
+      "type": "verify",
+      "description": "Rebuild, mass properties, bounding box, save",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 1001,
+      "macro_file": "ZZZ_export_stl.vba",
+      "feature_id": "-",
+      "type": "export",
+      "description": "Export the part as an STL beside the .sldprt (same base name)",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    },
+    {
+      "seq": 1000,
+      "macro_file": "RUN_ALL.vba",
+      "feature_id": "-",
+      "type": "run_all",
+      "description": "One macro that runs every step in order (paste once, F5)",
+      "status": "generated",
+      "dimensions_drawing_units": {},
+      "notes": "Single-run alternative to the numbered macros. Fillets/chamfers still need interactive edge selection.",
+      "dimensions_meters": {},
+      "positions_xy": [],
+      "positions_xy_meters": [],
+      "sketch_plane": "",
+      "parent_feature_id": "",
+      "depth_type": "",
+      "flags": [],
+      "requires_input": false,
+      "auto_select_strategy": "",
+      "expected_edge_count": 0,
+      "edge_selection_note": "",
+      "assumption_made": false,
+      "assumption_confidence": 1.0,
+      "flag_tier": "HIGH",
+      "position_source": "",
+      "position_confidence": 0.0
+    }
+  ],
+  "skipped_prohibited": [],
+  "needs_review": [],
+  "dispositions": [
+    {
+      "feature_id": "F001",
+      "type": "extrude_boss",
+      "stage": 1,
+      "stage_name": "base_solid",
+      "state": "BUILT",
+      "values_used": {
+        "length": 17.5,
+        "width": 11.25,
+        "thickness": 1.0
+      },
+      "derivation_source": "",
+      "position_xy": [
+        0.0,
+        0.0
+      ],
+      "flags": []
+    },
+    {
+      "feature_id": "F003",
+      "type": "hole",
+      "stage": 4,
+      "stage_name": "holes",
+      "state": "BUILT",
+      "values_used": {
+        "vertical_offset_top_corner_hole_to_inner_hole_row": 6.25,
+        "spacing": 6.0,
+        "vertical_offset_bottom_to_inner_hole_row": 6.5,
+        "horizontal_offset_left_edge_to_inner_hole_column": 6.781,
+        "hole_diameter": 0.531
+      },
+      "derivation_source": "",
+      "position_xy": [
+        7.625,
+        4.5
+      ],
+      "flags": []
+    },
+    {
+      "feature_id": "F002",
+      "type": "hole",
+      "stage": 4,
+      "stage_name": "holes",
+      "state": "BUILT",
+      "values_used": {
+        "spacing": 15.812,
+        "edge_offset_left_corner_hole": 0.844,
+        "edge_offset_top_corner_hole": 0.75,
+        "cbore_screw_clearance_nominal": 0.5
+      },
+      "derivation_source": "",
+      "position_xy": [
+        0.844,
+        10.5
+      ],
+      "flags": []
+    }
+  ],
+  "reference_geometry": [
+    {
+      "id": "REF_DATUM_A",
+      "type": "plane",
+      "definition": "coincident",
+      "source": "base datum (part origin)",
+      "parent": "Front Plane"
+    },
+    {
+      "id": "REF_SYM_Y",
+      "type": "plane",
+      "definition": "coincident",
+      "source": "symmetry plane (front)",
+      "parent": "Front Plane"
+    },
+    {
+      "id": "REF_PT_F002",
+      "type": "point",
+      "definition": "plane_plane_plane",
+      "source": "pattern origin (H001, 4 instances)",
+      "parents": [
+        "REF_DATUM_A"
+      ]
+    },
+    {
+      "id": "REF_PT_F003",
+      "type": "point",
+      "definition": "plane_plane_plane",
+      "source": "pattern origin (H002, 4 instances)",
+      "parents": [
+        "REF_DATUM_A"
+      ]
+    }
+  ],
+  "engineering_review": []
+}

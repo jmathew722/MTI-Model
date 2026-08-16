@@ -1813,6 +1813,22 @@ def part_stl(session: str, part: str):
     return FileResponse(str(p), media_type="model/stl", filename=p.name)
 
 
+def _explainer():
+    """The explainer module, imported the same way whichever way THIS module was.
+
+    ``run.ps1`` launches uvicorn with ``--app-dir webapp``, so a bare
+    ``import explainer`` resolves. Imported as a package instead
+    (``import webapp.app`` — what tests, tooling and any future embedding do),
+    that bare import raises ModuleNotFoundError and every explainer endpoint
+    500s. Try the package-qualified name first, fall back to the flat one.
+    """
+    try:
+        from webapp import explainer as _mod
+    except ImportError:  # launched with --app-dir: webapp/ IS the import root
+        import explainer as _mod
+    return _mod
+
+
 # ── Pipeline Explainer — LOCAL-ONLY (Ollama) chat over a run's artifacts ──────
 # Zero cost by design: the explainer module never imports the Anthropic client,
 # never reads ANTHROPIC_API_KEY, and contacts nothing but localhost:11434.
@@ -1825,14 +1841,14 @@ def explainer_health():
     """Ollama status + the model this explainer will use (for the status dot,
     model name, and the auto-pull decision). Never raises — a down Ollama is a
     normal, reported state, not an error."""
-    import explainer
+    explainer = _explainer()
     return explainer.health()
 
 
 @app.post("/api/explainer/pull")
 async def explainer_pull(request: Request):
     """Stream a one-time model download as NDJSON progress chunks."""
-    import explainer
+    explainer = _explainer()
     try:
         body = await request.json()
     except Exception:
@@ -1855,7 +1871,7 @@ async def explainer_pull(request: Request):
 @app.get("/api/explainer/history")
 def explainer_history(session: str, part: str):
     """Per-part persisted chat history + the zero-cost session footer."""
-    import explainer
+    explainer = _explainer()
     out = _part_output_dir(session, part)
     return {"part": _sanitize(part), "history": explainer.load_history(out),
             "usage": explainer.usage_total(out)}
@@ -1866,7 +1882,7 @@ async def explainer_chat(request: Request):
     """Stream a grounded answer as NDJSON. Body: {session, part, question,
     history?}. Writes an export manifest on first ask so 'where did my files
     go?' is answerable, persists the exchange to per-part history."""
-    import explainer
+    explainer = _explainer()
     try:
         body = await request.json()
     except Exception:

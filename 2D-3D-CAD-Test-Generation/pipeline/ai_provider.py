@@ -50,16 +50,34 @@ log = get_logger()
 ANTHROPIC = "anthropic"
 OPENAI = "openai"
 
-# Verification status per provider (REFACTOR_ANALYSIS §2.2). "production" = this
-# path is exercised by real drawing runs; "adapter_tested" = the translation
-# layer is unit-tested at every call site (tests/test_ai_provider.py) but the
-# path has NOT been run end-to-end against production drawings. Anything less
-# than "production" is stated out loud at selection time rather than implied by
-# the absence of a warning — a passing test suite with no live traffic behind it
-# is a false sense of coverage, which is exactly what §2.2 flagged.
+# Verification status per provider (REFACTOR_ANALYSIS §2.2), in increasing order
+# of evidence:
+#   "adapter_tested"          - translation unit-tested at every call site only.
+#   "live_plumbing_verified"  - a REAL call to the provider round-tripped: forced
+#                               tool call honored, response + usage translated.
+#                               Output QUALITY on real drawings still unmeasured.
+#   "production"              - exercised by real drawing runs end to end.
+# Anything below "production" is stated out loud at selection time rather than
+# implied by the absence of a warning — a passing test suite with no live
+# traffic behind it is a false sense of coverage, which is what §2.2 flagged.
 PROVIDER_STATUS: dict[str, str] = {
     ANTHROPIC: "production",
-    OPENAI: "adapter_tested",
+    # Live-verified 2026-08-16: gpt-5.6 accepted the translated request, made the
+    # forced tool call, and returned usage that priced correctly through
+    # usage_log.estimate_cost. See docs/PROVIDER_STATUS.md for the exact evidence.
+    OPENAI: "live_plumbing_verified",
+}
+
+_STATUS_NOTES: dict[str, str] = {
+    "adapter_tested": (
+        "the adapter is unit-tested at every call site but has never made a real "
+        "call — nothing about this path is verified against the live API."),
+    "live_plumbing_verified": (
+        "a live call round-trips correctly (forced tool call, response and usage "
+        "translation), but this path has NOT been run end-to-end against "
+        "production drawings: extraction QUALITY and real-world cost are "
+        "unmeasured."),
+    "unknown": "this provider is not recognized; falling back to Anthropic.",
 }
 
 _status_warned: set[str] = set()
@@ -88,10 +106,9 @@ def provider_status(provider: Optional[str] = None) -> dict[str, Any]:
         "production_verified": status == "production",
         "note": (
             "" if status == "production" else
-            f"AI_PROVIDER={prov}: the adapter is unit-tested at every call site but "
-            "has NOT been verified end-to-end against production drawings. Extraction "
-            "quality, tool-call reliability and cost accounting on this path are "
-            "unproven — see docs/PROVIDER_STATUS.md."
+            f"AI_PROVIDER={prov}: "
+            + _STATUS_NOTES.get(status, _STATUS_NOTES["unknown"])
+            + " See docs/PROVIDER_STATUS.md."
         ),
     }
 

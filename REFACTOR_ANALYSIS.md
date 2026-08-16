@@ -35,11 +35,54 @@ change stays readable next to the result.
 **Deliberately NOT done** (§3 non-goals): resolver vs must_meet, constraint_verify
 vs feature_verify, VBA vs COM, and macro_audit vs macro_echo all stay separate.
 
+---
+
+## ROUND 2 (2026-08-16) — what running everything actually found
+
+The consolidation above was verified by unit tests. Round 2 ran the *system*:
+every module imported, all 15 saved extractions rebuilt through the real CLI,
+every webapp route exercised, a live SolidWorks COM build, and a live call
+through the OpenAI adapter. That surfaced **six real defects that no unit test
+saw** — five pre-existing (reproduced on the pre-refactor commit before fixing),
+one introduced by the consolidation itself.
+
+| # | Defect | Found by | Fix |
+|---|---|---|---|
+| R1 | `A001271E` crashed generation: two independently-dimensioned .531 hole groups were treated as instances of ONE callout because sibling-hood was decided by DIAMETER alone, so both collapsed to (0,0) and the overlap guard refused the build | rebuilding all saved extractions | `macro_generator._shares_callout_siblings` — a same-diameter feature that owns its own callout is a separate group. All 8 holes now drill at their dimensioned positions |
+| R2 | `A001821M` crashed generation: the echo check demanded a geometry literal from a cosmetic-thread step that emits none by design | same sweep | `macro_echo._is_manual_only_step` — exempt ONLY steps that emit no geometry AND are `needs_review`; a `generated` step that dropped its literals still fails |
+| R3 | **Every COM build on this machine failed**: `SOLIDWORKS_TEMPLATE_PATH` still named a 2024 path after an upgrade to 2026, and the configured path was treated as authoritative | live COM build | `solidworks_builder.resolve_part_template` — configured path → SolidWorks' own preference → filesystem search (newest version, plain template preferred); a stale setting is a reported fallback, not a hard stop |
+| R4 | **The base solid was built at HALF WIDTH** on 16247: `total_flange_width` (2.0) and `flange_width` (1.0) both canonicalize to "width", and first-declared kept the component | measuring the built STL's bounding box | totality-aware collision policy (below) |
+| R5 | **COM and CadQuery silently built different shapes** from the same plan (1.0 vs 2.0 wide) because the collision rule was implemented THREE times — sequencer, VBA generator, COM builder — and the COM one used a bare `setdefault` | comparing both builders' bounding boxes | one owner: `schema.collapse_dimension_values`, used by all three. All three builders now measure identically |
+| R6 | Every explainer endpoint 500'd when the app is imported as a package (`webapp.app`) rather than via `--app-dir` | route sweep | `webapp.app._explainer()` resolves either import style; a test now pins both |
+
+**On R4/R5 — a deliberate revision of an earlier decision.** The 2026-07-28 rule
+("first-declared wins, never biggest-wins") was right to reject a magnitude
+heuristic, but it discarded a stronger signal: the label itself. A dimension
+labelled `total_*` / `overall_*` states, in the drawing's own words, that it
+measures the whole extent. First-declared remains the default; totality now wins
+a collision. This is not a return to "biggest wins" — a *smaller* total still
+wins, and that case is asserted in the tests. The evidence for the change was a
+part built at half its drawing size, measured off the STL.
+
+**Verification after round 2:** 1130 tests pass (baseline 981); all 15 saved
+extractions rebuild with zero errors; the two parts that exit 8 do so for genuine
+drawing ambiguity (an extraction declaring 4 instances with one dimensioned
+position), correctly flagged with an assist question rather than guessed.
+
+**Still open, and honestly so:** promoting the OpenAI path to "production" needs
+the batch quality comparison in `docs/PROVIDER_STATUS.md` (its *plumbing* is now
+live-verified — see that file); promoting HoleWizard5 needs the live session in
+`pipeline/experimental/README.md`. Both are judgement calls that need a decision
+about cost/scope, not more code.
+
+---
+
 **Known follow-ups created by this work** (recorded, not hidden):
 - The six source artifacts are still written by their stages; the ledger is a view
   over them. Retiring each file is the incremental next step, per §1.2's own plan.
-- `dwg_native/` does not yet write ledger entries — first item on the
-  `docs/DWG_PATHS.md` parity checklist.
+- ~~`dwg_native/` does not yet write ledger entries~~ — **closed 2026-08-16**: it
+  writes `<part>_feature_ledger.json` like the vision pipeline, and the ledger
+  reads both naming conventions.
 - Promoting or deleting the OpenAI path needs the batch comparison in
   `docs/PROVIDER_STATUS.md`; promoting or deleting HoleWizard5 needs the live
   session in `pipeline/experimental/README.md`. Both are decisions that require a

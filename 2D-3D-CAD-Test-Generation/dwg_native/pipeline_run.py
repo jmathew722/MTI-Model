@@ -101,6 +101,22 @@ def run_job(job: Job, session: Any, progress: Callable[[JobStatus, str], None]) 
                                                   encoding="utf-8")
     artifacts["verification"] = str(out / "verification_report.json")
 
+    # 5b. per-feature ledger ------------------------------------------------ #
+    # Parity with the vision pipeline (docs/DWG_PATHS.md checklist item, closed
+    # 2026-08-16): the same <part>_feature_ledger.json, so "what happened to
+    # F004?" is answered identically on both products. This path already speaks
+    # the shared disposition vocabulary (BUILT / BUILT_WITH_DERIVED_VALUE), so
+    # the ledger reads its build_plan.json directly. Never fatal — a reporting
+    # view must not fail a build that passed its gates.
+    try:
+        from pipeline.feature_ledger import write_ledger
+
+        led = write_ledger(out, bp["part"])
+        if led is not None:
+            artifacts["feature_ledger"] = str(led)
+    except Exception as e:  # pragma: no cover - defensive
+        log.warning("feature ledger not written: %s", e)
+
     job.result = {
         "part": bp["part"],
         "hole_count": bp.get("hole_count"),

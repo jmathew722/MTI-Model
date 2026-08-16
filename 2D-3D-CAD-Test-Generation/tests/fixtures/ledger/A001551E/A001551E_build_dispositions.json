@@ -1,0 +1,103 @@
+[
+  {
+    "feature_id": "F001",
+    "type": "extrude_boss",
+    "stage": 1,
+    "stage_name": "base_solid",
+    "state": "BUILT",
+    "values_used": {
+      "length": 21.0,
+      "height": 6.0,
+      "thickness": 0.5
+    },
+    "derivation_source": "",
+    "position_xy": [
+      0.0,
+      0.0
+    ],
+    "flags": []
+  },
+  {
+    "feature_id": "F002",
+    "type": "extrude_cut",
+    "stage": 3,
+    "stage_name": "profile_subtractions",
+    "state": "BUILT",
+    "values_used": {
+      "width": 0.515,
+      "spacing": 4.0,
+      "corner_slot_bottom_offset": 1.0,
+      "corner_slot_left_edge_offset": 0.75,
+      "length": 1.0
+    },
+    "derivation_source": "",
+    "position_xy": [
+      0.75,
+      1.0
+    ],
+    "flags": [],
+    "needs_human_input": true,
+    "question_id": "Q-A001551E-F002-unresolved-position",
+    "human_input_state": "NEEDS_HUMAN_INPUT"
+  },
+  {
+    "feature_id": "F003",
+    "type": "extrude_cut",
+    "stage": 3,
+    "stage_name": "profile_subtractions",
+    "state": "BUILT_WITH_DERIVED_VALUE",
+    "values_used": {
+      "horizontal_offset_to_first_center_slot_pair": 7.5,
+      "spacing": 6.0,
+      "width": 0.515,
+      "height": 3.63,
+      "center_slot_bottom_offset": 0.187,
+      "length": 2.37
+    },
+    "derivation_source": "profile_delta",
+    "position_xy": [
+      7.5,
+      0.187
+    ],
+    "flags": [],
+    "needs_human_input": true,
+    "question_id": "Q-A001551E-F003-unresolved-position",
+    "human_input_state": "NEEDS_HUMAN_INPUT"
+  },
+  {
+    "feature_id": "F004",
+    "type": "fillet",
+    "stage": 6,
+    "stage_name": "edge_treatments",
+    "state": "EXCLUDED_INCOMPLETE",
+    "values_used": {
+      "radius": 0.2575
+    },
+    "derivation_source": "",
+    "position_xy": [
+      0.0,
+      0.0
+    ],
+    "flags": [
+      {
+        "dimension_id": "F004",
+        "feature_id": "F004",
+        "flag_tier": "CRITICAL",
+        "human_note": "EXCLUDED FROM BUILD \u2014 fillet F004 is missing radius. No value was read, and none could be derived from the constraint graph, a TYP sibling, or a standard size. Rather than emit a build step that fails or places wrong geometry, F004 was left OUT of the model and recorded as a model-derived assumption in Tab 3. Expected on host feature F002. Add the missing value on the drawing and re-run to include this feature.",
+        "macro_behavior": "confirm_on_run",
+        "resolved_by_tier": "tier1_per_view",
+        "source": "missing_dimension",
+        "excluded_from_build": true,
+        "model_derived_assumption": true,
+        "expected_region": {
+          "kind": "on_parent",
+          "parent_feature": "F002"
+        },
+        "route_to_markup": true
+      }
+    ],
+    "needs_human_input": true,
+    "question_id": "Q-A001551E-F004-unclassifiable-callout",
+    "human_input_state": "NEEDS_HUMAN_INPUT"
+  }
+]

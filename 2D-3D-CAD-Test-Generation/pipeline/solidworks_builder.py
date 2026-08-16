@@ -22,12 +22,21 @@ Windows + SolidWorks 2024 to exercise the COM paths.
 """
 from __future__ import annotations
 
+import glob
+import re
 import math
 import sys
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from pipeline.schema import DrawingData, Feature, FeatureType, HoleType, PatternKind
+from pipeline.schema import (
+    DrawingData,
+    Feature,
+    FeatureType,
+    HoleType,
+    PatternKind,
+    collapse_dimension_values,
+)
 from utils.logger import get_logger
 from utils.unit_converter import assert_meters, to_meters, to_radians
 
@@ -226,24 +235,97 @@ def connect_to_solidworks():
     return sw_app
 
 
+# Where SolidWorks keeps part templates when the app's own preference is unset
+# or stale. Version-globbed on purpose: an upgrade (2024 -> 2026) moves the
+# folder, and a configured path pinned to the old version is exactly how every
+# COM build on an upgraded machine started failing (found 2026-08-16 on a live
+# box whose .env still named the 2024 path).
+# Recursive on purpose: a 2026 install ships its part templates under
+# templates\MBD\, not directly in templates\.
+_TEMPLATE_SEARCH_GLOBS = (
+    r"C:\ProgramData\SolidWorks\SOLIDWORKS *\templates\**\*.prtdot",
+    r"C:\ProgramData\SolidWorks\SolidWorks *\templates\**\*.prtdot",
+    r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS *\templates\**\*.prtdot",
+    r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\data\templates\**\*.prtdot",
+    r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\lang\english\**\*.prtdot",
+)
+
+
+def resolve_part_template(sw_app, template_path: Optional[str] = None) -> str:
+    """The part template to build from, trying every source in order.
+
+    1. the explicit path (``SOLIDWORKS_TEMPLATE_PATH`` / ``--template``) — used
+       only IF IT EXISTS. A configured-but-missing path is a stale setting, not
+       a reason to fail: it is reported and the search continues.
+    2. SolidWorks' own default-part-template preference.
+    3. a filesystem search of the standard template locations, newest version
+       first, preferring a plainly-named ``Part.prtdot`` over the MBD variants.
+
+    Raises :class:`SolidWorksError` naming every location tried when nothing is
+    found — so the message tells the operator what to fix, not just that it broke.
+    """
+    tried: list[str] = []
+
+    def _usable(path: Optional[str]) -> Optional[str]:
+        if path and Path(path).exists():
+            return path
+        if path:
+            tried.append(f"{path} (configured, missing)")
+        return None
+
+    found = _usable(template_path)
+    if found:
+        return found
+
+    try:
+        pref = sw_app.GetUserPreferenceStringValue(_const("swDefaultTemplatePart", 8))
+        found = _usable(pref)
+        if found:
+            log.info("Part template from the SolidWorks default preference: %s", found)
+            return found
+    except Exception as e:  # a missing preference must not end the run
+        tried.append(f"SolidWorks default-template preference ({type(e).__name__})")
+
+    candidates: list[Path] = []
+    for pattern in _TEMPLATE_SEARCH_GLOBS:
+        candidates.extend(Path(p) for p in glob.glob(pattern, recursive=True))
+    if candidates:
+        # Prefer, in order: a plainly-named template ("part.prtdot") over the
+        # size-specific MBD variants; a non-MBD folder over an MBD one; then the
+        # NEWEST SolidWorks version (parsed as a number, so 2026 > 2024 — string
+        # ordering would also have to cope with "SOLIDWORKS" vs "SolidWorks").
+        def _version(p: Path) -> int:
+            years = re.findall(r"(20\d\d)", str(p))
+            return max((int(y) for y in years), default=0)
+
+        def _rank(p: Path) -> tuple:
+            plain = 0 if p.stem.strip().lower() in ("part", "part_mm", "part_in") else 1
+            mbd = 1 if "mbd" in str(p).lower() else 0
+            return (plain, mbd, -_version(p), str(p))
+
+        best = sorted(candidates, key=_rank)[0]
+        log.warning("Part template not configured (or the configured one is gone) — "
+                    "using the newest installed template found: %s", best)
+        return str(best)
+    tried.extend(_TEMPLATE_SEARCH_GLOBS)
+
+    raise SolidWorksError(
+        "No SolidWorks part template could be found. Tried: "
+        + "; ".join(tried)
+        + ". Set SOLIDWORKS_TEMPLATE_PATH in .env to a real .prtdot, or configure "
+          "the default template in SolidWorks (Tools > Options > File Locations > "
+          "Document Templates)."
+    )
+
+
 def create_new_part(sw_app, template_path: Optional[str] = None):
     """Create a new part document.
 
     Raises:
-        SolidWorksError: if the template is missing or the document is not created.
+        SolidWorksError: if no template can be resolved or the document is not
+        created.
     """
-    if not template_path:
-        # swUserPreferenceStringValue.swDefaultTemplatePart = 8 (documented default).
-        try:
-            template_path = sw_app.GetUserPreferenceStringValue(_const("swDefaultTemplatePart", 8))
-        except Exception as e:
-            raise SolidWorksError(f"Could not resolve default part template: {e}") from e
-
-    if not template_path or not Path(template_path).exists():
-        raise SolidWorksError(
-            f"Part template not found: {template_path!r}. Set SOLIDWORKS_TEMPLATE_PATH "
-            "in .env or ensure the SolidWorks default template is configured."
-        )
+    template_path = resolve_part_template(sw_app, template_path)
 
     sw_doc = sw_app.NewDocument(template_path, 0, 0, 0)
     if sw_doc is None:
@@ -301,6 +383,7 @@ def get_dimensions_for_feature(model: DrawingData, feature: Feature) -> dict[str
     if feature.depth_dimension_id and feature.depth_dimension_id not in ids:
         ids.append(feature.depth_dimension_id)
 
+    canon_items: list[tuple[str, str, float]] = []
     for dim_id in ids:
         dim = model.dimension_by_id(dim_id)
         if dim is None:
@@ -315,12 +398,10 @@ def get_dimensions_for_feature(model: DrawingData, feature: Feature) -> dict[str
         resolved[key] = value
         # Also expose the value under its CANONICAL applies_to token so the feature
         # builders find width/length/height/diameter regardless of the descriptive
-        # label (e.g. "overall_width"->"width", "inside_height"->"height"). This
-        # mirrors the VBA generator's _dims_map and fixes empty-body builds where
-        # the base profile was labeled "overall_*"/"inside_*".
+        # label (e.g. "overall_width"->"width", "inside_height"->"height").
         canon = getattr(dim, "canonical_applies_to", "") or ""
         if canon:
-            resolved.setdefault(canon, value)
+            canon_items.append((canon, dim.applies_to or "", value))
         # Also expose the value under its canonical geometric type so the feature
         # builders find a diameter/radius regardless of its descriptive applies_to
         # label (e.g. "outer_diameter"/"bore_diameter" -> reachable as "diameter").
@@ -328,6 +409,18 @@ def get_dimensions_for_feature(model: DrawingData, feature: Feature) -> dict[str
             resolved.setdefault("diameter", value)
         elif dim.type.value == "radial":
             resolved.setdefault("radius", value)
+
+    # Canonical-key collisions go through the ONE shared policy
+    # (pipeline.schema.collapse_dimension_values), the same one the build
+    # sequencer and the VBA generator use. This used to be a bare setdefault
+    # ("first label wins"), which is how the COM build of 16247 came out 1.0
+    # wide (flange_width) while the plan, the VBA and CadQuery all said 2.0
+    # (total_flange_width) — a silent COM-vs-CadQuery divergence in the base
+    # solid, found 2026-08-16 by measuring both builders' bounding boxes.
+    canon_values, notes = collapse_dimension_values(canon_items)
+    for note in notes:
+        log.warning("%s: colliding dimensions — %s", feature.id, note)
+    resolved.update(canon_values)
 
     # Also expose the depth explicitly under "depth" for builders that need it.
     if feature.depth_dimension_id:

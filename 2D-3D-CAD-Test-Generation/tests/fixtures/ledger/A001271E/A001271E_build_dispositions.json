@@ -1,0 +1,59 @@
+[
+  {
+    "feature_id": "F001",
+    "type": "extrude_boss",
+    "stage": 1,
+    "stage_name": "base_solid",
+    "state": "BUILT",
+    "values_used": {
+      "length": 17.5,
+      "width": 11.25,
+      "thickness": 1.0
+    },
+    "derivation_source": "",
+    "position_xy": [
+      0.0,
+      0.0
+    ],
+    "flags": []
+  },
+  {
+    "feature_id": "F003",
+    "type": "hole",
+    "stage": 4,
+    "stage_name": "holes",
+    "state": "BUILT",
+    "values_used": {
+      "vertical_offset_top_corner_hole_to_inner_hole_row": 6.25,
+      "spacing": 6.0,
+      "vertical_offset_bottom_to_inner_hole_row": 6.5,
+      "horizontal_offset_left_edge_to_inner_hole_column": 6.781,
+      "hole_diameter": 0.531
+    },
+    "derivation_source": "",
+    "position_xy": [
+      7.625,
+      4.5
+    ],
+    "flags": []
+  },
+  {
+    "feature_id": "F002",
+    "type": "hole",
+    "stage": 4,
+    "stage_name": "holes",
+    "state": "BUILT",
+    "values_used": {
+      "spacing": 15.812,
+      "edge_offset_left_corner_hole": 0.844,
+      "edge_offset_top_corner_hole": 0.75,
+      "cbore_screw_clearance_nominal": 0.5
+    },
+    "derivation_source": "",
+    "position_xy": [
+      0.844,
+      10.5
+    ],
+    "flags": []
+  }
+]

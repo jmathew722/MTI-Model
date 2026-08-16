@@ -343,9 +343,11 @@ def test_openai_status_states_it_is_not_production_verified(monkeypatch):
     monkeypatch.setenv("AI_PROVIDER", "openai")
     st = provider_status()
     assert st["provider"] == "openai"
-    assert st["status"] == "adapter_tested"
+    assert st["status"] == "live_plumbing_verified"
     assert st["production_verified"] is False
-    assert "NOT been verified end-to-end" in st["note"]
+    # live-verified plumbing, explicitly NOT verified drawing quality
+    assert "NOT been run end-to-end against production drawings" in st["note"]
+    assert "docs/PROVIDER_STATUS.md" in st["note"]
     assert st["model"] == "gpt-5.6"
 
 
@@ -368,7 +370,7 @@ def test_selecting_an_unverified_provider_warns_once(monkeypatch, caplog):
     with caplog.at_level("WARNING"):
         assert ap.build_client(1) == "CLIENT"
         assert ap.build_client(1) == "CLIENT"
-    warnings = [r for r in caplog.records if "NOT been verified" in r.getMessage()]
+    warnings = [r for r in caplog.records if "docs/PROVIDER_STATUS.md" in r.getMessage()]
     assert len(warnings) == 1          # once per process, not once per call
 
 

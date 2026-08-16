@@ -6,6 +6,7 @@ overwritten, the order is the pipeline's own stage order, every source artifact
 is optional, and a partial run still produces a valid ledger.
 """
 import json
+from pathlib import Path
 
 import pytest
 
@@ -191,6 +192,59 @@ class TestDirectRecording:
         assert [r.feature_id for r in led.with_status(EXCLUDED_INCOMPLETE)] == ["F002"]
 
 
+class TestAgainstRealArtifacts:
+    """Frozen REAL artifacts from a pipeline run (tests/fixtures/ledger/), the
+    same discipline test_summary_view uses.
+
+    Synthetic fixtures agree with whatever shape the test author imagined — and
+    that is exactly how the first cut of this module ended up reading a `reason`
+    key the reconciler never writes (it writes `issue`). These tests read what
+    the pipeline actually produces.
+    """
+
+    FIXTURES = Path(__file__).parent / "fixtures" / "ledger"
+
+    def test_reconciliation_finding_is_carried_not_lost(self):
+        """The reconciler's `issue` text is the useful half of the finding."""
+        led = build_ledger(self.FIXTURES / "A001551E", part="A001551E")
+        rec = led.get("F002")
+        entry = rec.at(STAGE_RECONCILE)
+        assert entry is not None
+        assert "describes 4 instance(s) but only 1" in entry.detail
+        assert entry.data.get("resolution_attempted")      # narrative kept too
+
+    def test_full_history_of_an_escalated_feature(self):
+        led = build_ledger(self.FIXTURES / "A001551E", part="A001551E")
+        rec = led.get("F004")
+        assert [e.stage for e in rec.history] == [
+            STAGE_SEQUENCER, STAGE_RECONCILE, STAGE_ASSIST]
+        assert rec.disposition_state == EXCLUDED_INCOMPLETE
+        assert rec.needs_human_input
+        assert "missing radius" in rec.at(STAGE_ASSIST).detail
+
+    def test_one_fact_from_two_artifacts_is_one_entry(self):
+        """The pending question is written BOTH as a disposition overlay and as
+        an assist-queue question. That is one fact with two sources."""
+        led = build_ledger(self.FIXTURES / "A001551E", part="A001551E")
+        rec = led.get("F002")
+        assist_entries = [e for e in rec.history if e.stage == STAGE_ASSIST]
+        assert len(assist_entries) == 1
+        e = assist_entries[0]
+        assert "assist_queue.json" in e.source and "build_dispositions.json" in e.source
+        assert len(e.detail) > len("disposition overlay")   # richest detail won
+
+    def test_a_clean_part_has_no_open_items(self):
+        led = build_ledger(self.FIXTURES / "A001271E", part="A001271E")
+        assert len(led) == 3
+        assert led.open_items() == []
+        assert all(r.disposition_state == BUILT for r in led.features.values())
+
+    def test_real_dispositions_use_type_not_feature_type(self):
+        """The disposition table's key is `type`; the reader must accept it."""
+        led = build_ledger(self.FIXTURES / "A001271E", part="A001271E")
+        assert led.get("F002").feature_type == "hole"
+
+
 class TestSummaryViewUsesTheLedger:
     """The first migrated consumer (REFACTOR_ANALYSIS §1.2) — it must actually
     read the ledger, not keep its own private reconciliation."""
@@ -201,3 +255,36 @@ class TestSummaryViewUsesTheLedger:
         from pipeline import summary_view
 
         assert "build_ledger" in inspect.getsource(summary_view.build_summary)
+
+
+class TestDwgNativeParity:
+    """docs/DWG_PATHS.md parity item, closed 2026-08-16. The DWG-native pipeline
+    is a first-class product, so the ledger must read ITS artifacts too — it
+    writes them bare (`build_plan.json`) where the vision pipeline prefixes them
+    (`158-C_build_plan.json`)."""
+
+    def test_bare_build_plan_naming_is_read(self, tmp_path):
+        _write(tmp_path, "build_plan.json", {
+            "part": "DWGPART",
+            "steps": [{"seq": 1, "feature_id": "F001", "type": "extrude_boss",
+                       "status": "generated"}],
+            "dispositions": [
+                {"feature_id": "F001", "type": "extrude_boss", "state": BUILT,
+                 "values_used": {"length": 4.0}},
+                {"feature_id": "F002", "type": "hole",
+                 "state": "BUILT_WITH_DERIVED_VALUE"},
+            ]})
+        led = build_ledger(tmp_path, part="DWGPART")
+        assert led.ids() == ["F001", "F002"]
+        assert led.get("F001").disposition_state == BUILT
+        assert led.get("F001").feature_type == "extrude_boss"
+        assert led.get("F001").status_at(STAGE_MACRO) == "generated"
+
+    def test_dwg_native_run_writes_the_ledger(self):
+        import inspect
+
+        from dwg_native import pipeline_run
+
+        src = inspect.getsource(pipeline_run.run_job)
+        assert "write_ledger" in src
+        assert "feature_ledger" in src

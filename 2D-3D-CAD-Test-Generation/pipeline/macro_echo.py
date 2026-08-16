@@ -87,6 +87,10 @@ class EchoReport:
     issues: list[EchoIssue] = field(default_factory=list)
     checked_files: int = 0
     checked_literals: int = 0
+    # Steps whose macro emits no geometry BY DESIGN (manual cosmetic-thread /
+    # skeleton steps). Recorded so the exemption is visible in the report rather
+    # than being an invisible hole in the invariant.
+    manual_steps: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -119,6 +123,20 @@ def _step_positions_m(step) -> list[tuple[float, float]]:
         if len(p) == 2:
             out.append((float(p[0]), float(p[1])))
     return out
+
+
+def _is_manual_only_step(step, seen_pos: list, seen_pos_m: list) -> bool:
+    """Whether this step's macro is a MANUAL placeholder that emits no geometry.
+
+    True only when the macro produced no geometry literal of either frame AND
+    the step is flagged ``needs_review`` — the documented "apply this by hand"
+    class (cosmetic thread, skeleton revolve/mirror). Both conditions are
+    required: a geometry step that silently dropped its literals stays
+    ``generated`` and must still fail the check.
+    """
+    if seen_pos or seen_pos_m:
+        return False
+    return str(getattr(step, "status", "")) == "needs_review"
 
 
 def _step_dims(step) -> list[float]:
@@ -262,6 +280,17 @@ def check_macro_echo(pkg, macros_dir: Optional[Path] = None) -> EchoReport:
         # literals; slot features emit meters literals. Only enforce the frame
         # the macro actually uses (else the other frame's positions read as
         # spuriously missing).
+        #
+        # A step whose macro emits NO geometry at all AND is flagged for manual
+        # completion (a cosmetic thread, a skeleton revolve/mirror) has nothing
+        # to round-trip — requiring a literal from it is a false positive, and
+        # it crashed generation on real parts (A001821M's F005 cosmetic thread,
+        # fixed 2026-08-16). The exemption is deliberately narrow: BOTH no
+        # geometry emitted AND status "needs_review". A hole step that silently
+        # dropped its circle is status "generated" and is still caught.
+        if _is_manual_only_step(step, seen_pos, seen_pos_m):
+            report.manual_steps.append(fid)
+            continue
         if step.feature_type in ("extrude_boss", "extrude_cut", "hole", "thread"):
             for (x, y) in own_pos:
                 if not _pair_in(seen_pos, x, y, TOL_DRAWING):

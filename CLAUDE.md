@@ -144,6 +144,13 @@ worked examples: EXTREME_README §6.**
   `EXCLUDED_INCOMPLETE`, plus the `NEEDS_HUMAN_INPUT` overlay.
 - **Position sources (precedence order):** `spec_driven` > `vector_geometry` >
   `anchor_solver` > `resolved_dimension` > `committed_conservative`.
+- **Dimension collisions** (two of a feature's dimensions canonicalizing to the
+  same key): first-declared wins, UNLESS a label declares totality
+  (`overall_*`, `total_*`, …) — that one measures the whole extent by
+  definition. One owner: `schema.collapse_dimension_values`, used by the build
+  sequencer, the VBA generator AND the COM builder. Never re-implement it: when
+  the COM path had its own `setdefault` version, it built a part half the
+  drawing's width while CadQuery built it correctly.
 
 ## Where else to look
 

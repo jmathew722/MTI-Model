@@ -10,7 +10,32 @@ tax. This file is the status, and the code now states it out loud at runtime.
 | Provider | `AI_PROVIDER` | Default model | Status | Meaning |
 |---|---|---|---|---|
 | Anthropic | unset (default) | `claude-sonnet-5` | **production** | exercised by real drawing runs; the path every golden artifact came from |
-| OpenAI | `openai` | `gpt-5.6` | **adapter_tested** | the translation layer is unit-tested at EVERY call site; NOT verified end-to-end against production drawings |
+| OpenAI | `openai` | `gpt-5.6` | **live_plumbing_verified** | a REAL call round-trips; drawing-extraction QUALITY still unmeasured |
+
+## Live verification — 2026-08-16
+
+One minimal call was made against the real API through the adapter (a synthetic
+prompt, no drawing data), because a test suite with no live traffic behind it
+proves nothing about the wire format:
+
+```
+model        gpt-5.6
+request      forced tool call (tool_choice), reasoning_effort="none"
+stop_reason  tool_use                       <- translated from finish_reason
+tool call    report_reading {"value": 2.5, "unit": "IN"}
+usage        input=157 output=24 cache_read=0 cache_write=0
+cost         $0.001505  (priced by usage_log.estimate_cost)
+verdict      PASS
+```
+
+So the whole translation chain is real-world correct: Anthropic-shaped request →
+OpenAI Chat Completions → forced tool call honored → response and usage
+translated back into Anthropic's shape → priced by the shared ledger.
+
+**What this still does NOT prove:** extraction QUALITY on real engineering
+drawings (vision reading of dimension text, callout parsing, cross-view
+reasoning) and real per-part cost. That needs the batch comparison below, which
+is the remaining gate to "production".
 
 `pipeline.ai_provider.provider_status()` returns this programmatically, and
 `build_client()` logs a warning **once per process** when a
@@ -35,9 +60,10 @@ comes out:
   `cache_creation_input_tokens` = 0) and priced by `usage_log.estimate_cost`, so
   the ledger cannot silently under-report on this path.
 
-That is the honest boundary: **the plumbing is proven; the OUTPUT QUALITY is
-not.** Extraction accuracy, tool-call reliability under real drawing images, and
-real-world cost are unmeasured on the OpenAI path.
+That is the honest boundary: **the plumbing is proven — now both in unit tests
+and against the live API (see above) — while the OUTPUT QUALITY is not.**
+Extraction accuracy on real drawing images and real-world per-part cost remain
+unmeasured on the OpenAI path.
 
 ## To promote OpenAI to "production"
 

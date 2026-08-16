@@ -448,3 +448,37 @@ class TestProviderSwitch:
         assert total["messages"] == 2
         assert total["cost_usd"] == pytest.approx(0.006)
         assert total["all_local"] is False
+
+
+# --------------------------------------------------------------------------- #
+# Import robustness (2026-08-16): the app must work under BOTH import styles
+# --------------------------------------------------------------------------- #
+class TestExplainerImportStyle:
+    """`run.ps1` starts uvicorn with `--app-dir webapp`, so `import explainer`
+    resolves. Imported as a package (`import webapp.app` — what tests, tooling
+    and any future embedding do), that bare import raised ModuleNotFoundError
+    and EVERY explainer endpoint 500'd. Found by the route sweep, not by a unit
+    test, because no unit test had ever imported the app as a package."""
+
+    def test_endpoints_work_when_the_app_is_imported_as_a_package(self):
+        from fastapi.testclient import TestClient
+
+        import webapp.app as app_module
+
+        client = TestClient(app_module.app)
+        r = client.get("/api/explainer/health")
+        assert r.status_code == 200          # not 500
+        assert "ok" in r.json()
+
+    def test_helper_resolves_the_module_either_way(self):
+        import webapp.app as app_module
+
+        mod = app_module._explainer()
+        assert hasattr(mod, "health") and hasattr(mod, "ARTIFACT_REGISTRY")
+
+    def test_no_bare_explainer_import_remains_in_endpoints(self):
+        """A new endpoint copying the old `import explainer` line would silently
+        reintroduce the same 500."""
+        src = (Path(__file__).resolve().parent.parent / "webapp" / "app.py").read_text(
+            encoding="utf-8")
+        assert "\n    import explainer\n" not in src

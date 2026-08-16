@@ -204,3 +204,127 @@ class TestBaseFrame:
         assert (x1, y1) == (0.0, 0.0)
         assert x2 > 0 and y2 > 0
         assert "center_rects" not in rec
+
+
+# --------------------------------------------------------------------------- #
+# Canonical-key collisions must resolve the SAME way on every builder
+# (2026-08-16; found by measuring a live COM build against CadQuery)
+# --------------------------------------------------------------------------- #
+class TestDimensionCollisionParity:
+    """16247 has ``flange_width`` 1.0 and ``total_flange_width`` 2.0, which both
+    canonicalize to "width". The COM path resolved that with a bare setdefault
+    ("first label wins") and built the base 1.0 wide, while the build plan, the
+    VBA and CadQuery all used 2.0 — a silent divergence in the BASE SOLID that
+    no unit test saw, because no test compared the two builders' output."""
+
+    DIMS = [
+        {"id": "D003", "type": "linear", "value": 1.0, "unit": "inch",
+         "applies_to": "flange_width"},
+        {"id": "D005", "type": "linear", "value": 2.0, "unit": "inch",
+         "applies_to": "total_flange_width"},
+        {"id": "D001", "type": "linear", "value": 19.25, "unit": "inch",
+         "applies_to": "overall_height"},
+        {"id": "D006", "type": "linear", "value": 0.28, "unit": "inch",
+         "applies_to": "depth"},
+    ]
+
+    def _model(self):
+        return DrawingData.model_validate({
+            "units": "inch", "confidence": 0.9, "dimensions": self.DIMS,
+            "features": [{"id": "F001", "type": "extrude_boss",
+                          "description": "channel base",
+                          "related_dimensions": ["D003", "D005", "D001"],
+                          "depth_dimension_id": "D006"}],
+        })
+
+    def test_com_dimensions_prefer_the_overall_label(self):
+        model = self._model()
+        dims = swb.get_dimensions_for_feature(model, model.features[0])
+        assert dims["width"] == pytest.approx(2.0 * 0.0254)      # not 1.0
+        assert dims["height"] == pytest.approx(19.25 * 0.0254)
+        # the raw labels stay reachable for anything that wants the component
+        assert dims["flange_width"] == pytest.approx(1.0 * 0.0254)
+
+    def test_com_base_rectangle_matches_the_shared_sizer(self):
+        from pipeline.macro_generator import _dims_map, profile_extents
+
+        model = self._model()
+        feature = model.features[0]
+        com_h, com_v = swb._rect_sides(swb.get_dimensions_for_feature(model, feature))
+        vba_h, vba_v = profile_extents(_dims_map(model, feature))
+        # same shape in both builders (COM in meters, VBA in drawing units)
+        assert com_h == pytest.approx(vba_h * 0.0254)
+        assert com_v == pytest.approx(vba_v * 0.0254)
+        assert vba_h == pytest.approx(2.0)
+
+
+# --------------------------------------------------------------------------- #
+# Part-template resolution (2026-08-16): a SolidWorks upgrade must not silently
+# break every COM build
+# --------------------------------------------------------------------------- #
+class TestPartTemplateResolution:
+    """The live box had `SOLIDWORKS_TEMPLATE_PATH` pinned to a SolidWorks 2024
+    path after upgrading to 2026. The configured path was treated as
+    authoritative, so `create_new_part` raised and EVERY .sldprt build failed —
+    while a perfectly good 2026 template sat on disk. A stale setting is now a
+    reported fallback, not a hard stop."""
+
+    class _App:
+        def __init__(self, pref=""):
+            self.pref = pref
+
+        def GetUserPreferenceStringValue(self, _n):
+            return self.pref
+
+    def test_an_existing_configured_path_wins(self, tmp_path):
+        t = tmp_path / "Part.prtdot"
+        t.write_text("x", encoding="utf-8")
+        assert swb.resolve_part_template(self._App(), str(t)) == str(t)
+
+    def test_a_stale_configured_path_falls_back_to_the_solidworks_preference(self, tmp_path):
+        good = tmp_path / "Default.prtdot"
+        good.write_text("x", encoding="utf-8")
+        got = swb.resolve_part_template(self._App(str(good)),
+                                        str(tmp_path / "gone-2024.prtdot"))
+        assert got == str(good)
+
+    def test_a_broken_preference_call_does_not_end_the_run(self, tmp_path, monkeypatch):
+        class Boom:
+            def GetUserPreferenceStringValue(self, _n):
+                raise RuntimeError("COM says no")
+
+        found = tmp_path / "part.prtdot"
+        found.write_text("x", encoding="utf-8")
+        monkeypatch.setattr(swb, "_TEMPLATE_SEARCH_GLOBS",
+                            (str(tmp_path / "*.prtdot"),))
+        assert swb.resolve_part_template(Boom(), None) == str(found)
+
+    def test_search_prefers_a_plain_template_then_the_newest_version(self, tmp_path, monkeypatch):
+        old = tmp_path / "SOLIDWORKS 2024" / "templates"
+        new = tmp_path / "SOLIDWORKS 2026" / "templates" / "MBD"
+        old.mkdir(parents=True)
+        new.mkdir(parents=True)
+        (old / "Part.prtdot").write_text("x", encoding="utf-8")
+        (new / "part 0001mm and smaller.prtdot").write_text("x", encoding="utf-8")
+        monkeypatch.setattr(swb, "_TEMPLATE_SEARCH_GLOBS",
+                            (str(tmp_path / "**" / "*.prtdot"),))
+        # plain "Part.prtdot" beats the size-specific MBD variant
+        assert swb.resolve_part_template(self._App(), None).endswith("Part.prtdot")
+
+    def test_newest_version_wins_between_equivalent_templates(self, tmp_path, monkeypatch):
+        for year in ("2024", "2026"):
+            d = tmp_path / f"SOLIDWORKS {year}" / "templates"
+            d.mkdir(parents=True)
+            (d / "Part.prtdot").write_text("x", encoding="utf-8")
+        monkeypatch.setattr(swb, "_TEMPLATE_SEARCH_GLOBS",
+                            (str(tmp_path / "**" / "*.prtdot"),))
+        assert "2026" in swb.resolve_part_template(self._App(), None)
+
+    def test_nothing_found_names_everything_tried(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(swb, "_TEMPLATE_SEARCH_GLOBS",
+                            (str(tmp_path / "nope" / "*.prtdot"),))
+        with pytest.raises(swb.SolidWorksError) as e:
+            swb.resolve_part_template(self._App(), str(tmp_path / "stale.prtdot"))
+        msg = str(e.value)
+        assert "stale.prtdot (configured, missing)" in msg
+        assert "SOLIDWORKS_TEMPLATE_PATH" in msg      # tells the operator the fix

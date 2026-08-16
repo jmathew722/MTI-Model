@@ -178,6 +178,68 @@ def canonicalize_applies_to(label: str) -> str:
     return ""
 
 
+# Label words that say "this dimension measures the WHOLE extent", not a part of
+# it. Used to settle canonical-key collisions (see collapse_dimension_values).
+_TOTALITY_MARKERS = ("overall", "over_all", "over-all", "total", "outside",
+                     "outer", "full", "o.a.", "oa_")
+
+
+def declares_totality(label: str) -> bool:
+    """Whether a dimension's own label states that it is the overall extent."""
+    s = (label or "").strip().lower().replace(" ", "_")
+    return any(m in s for m in _TOTALITY_MARKERS)
+
+
+def collapse_dimension_values(
+    items: "list[tuple[str, str, float]]",
+) -> "tuple[dict[str, float], list[str]]":
+    """Collapse ``(canonical_key, raw_label, value)`` triples into one value per
+    key, applying THE collision policy — in one place, for every caller.
+
+    Policy, in order:
+
+    1. **First-declared wins.** The drawing's own linking order is a principled
+       tie-break; "biggest number wins" is not (2026-07-28 fix — that arbitrary
+       rule could size a base or a cut from the wrong dimension).
+    2. **Unless a later label declares TOTALITY** ("overall", "total", …). Such
+       a label states, in the drawing's own words, that it measures the whole
+       extent — so for an envelope key it is the right value by definition. This
+       is not the old magnitude heuristic: a *smaller* total still wins.
+
+    Rule 2 exists because rule 1 alone built a real part at half size: 16247's
+    ``total_flange_width`` (2.0) and ``flange_width`` (1.0) both canonicalize to
+    "width", first-declared kept the COMPONENT, and the live COM build came out
+    1.0 wide against a 2.0 drawing (caught 2026-08-16 by measuring the built
+    STL's bounding box, not by any unit test).
+
+    Returns ``(values, notes)``; every collision produces a note so it stays
+    visible rather than being silently resolved either way.
+    """
+    values: dict[str, float] = {}
+    winner_total: dict[str, bool] = {}
+    notes: list[str] = []
+    for key, label, value in items:
+        if not key:
+            continue
+        value = float(value)
+        is_total = declares_totality(label)
+        if key not in values:
+            values[key], winner_total[key] = value, is_total
+            continue
+        if values[key] == value:
+            continue
+        if is_total and not winner_total.get(key, False):
+            notes.append(
+                f"{key}: {values[key]:.6g} -> {value:.6g} (label {label!r} declares "
+                f"the OVERALL extent)")
+            values[key], winner_total[key] = value, True
+        else:
+            notes.append(
+                f"{key}: kept the first-declared {values[key]:.6g} over {value:.6g} "
+                f"({label!r})")
+    return values, notes
+
+
 def is_envelope_label(label: str) -> bool:
     """True for a label that denotes a part OVERALL envelope dimension.
 
