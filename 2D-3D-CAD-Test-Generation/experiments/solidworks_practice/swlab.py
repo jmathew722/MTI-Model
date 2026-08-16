@@ -163,6 +163,24 @@ class Lab:
             except Exception:
                 return None
 
+    def delete_feature(self, doc, name: str) -> bool:
+        """Delete a named feature — lets ONE part host independent experiments.
+
+        Select the feature by the name WE gave it (never an auto-generated one)
+        and delete it, so the next experiment starts from the same known state.
+        """
+        try:
+            doc.ClearSelection2(True)
+            ok = doc.Extension.SelectByID2(name, "BODYFEATURE", 0, 0, 0,
+                                           False, 0, _null_dispatch(), 0)
+            if not ok:
+                return False
+            doc.Extension.DeleteSelection2(0)
+            doc.ClearSelection2(True)
+            return True
+        except Exception:
+            return False
+
     # -- measurement (from the LIVE model, never from intent) --------------- #
     def bodies(self, doc) -> list:
         try:

@@ -151,3 +151,26 @@ nothing, and both direction flips return `None`.
 **Fix:** resolve the sketch-plane → model-axis mapping per plane before placing
 geometry; verify by measuring the resulting cylindrical face, not by the call's
 return value.
+
+### E016 — two centerlines do NOT fail a revolve (doc contradiction)
+**Symptom:** a revolve sketch containing TWO centerlines built successfully and
+returned a feature. Reference doc 06 states this makes the axis ambiguous and
+the revolve fail.
+**Cause:** on SolidWorks 2026 the revolve picks one centerline rather than
+rejecting the sketch. Which one it picks was not determined.
+**Fix:** do not rely on SolidWorks to reject an ambiguous axis. Emit exactly one
+centerline per revolve sketch and assert that count before calling
+`FeatureRevolve2` — the API will not tell you.
+
+### E017 — patterns and mirrors fail SILENTLY (None / wrong location, no error)
+**Symptom:** three separate cases in one session — `FeatureLinearPattern4` and
+`FeatureCircularPattern5` returned `None` with no exception and no new geometry;
+`InsertMirrorFeature2` returned a valid feature while producing no new
+cylindrical face because the mirrored copy landed off the part.
+**Cause:** pattern/mirror features depend entirely on the selection state
+(direction or axis at Mark 1, seed feature at Mark 4, mirror plane at Mark 2).
+A wrong or missing selection is not an error condition to SolidWorks.
+**Fix:** never accept a pattern/mirror on its return value. Count the resulting
+geometry — cylindrical faces for hole patterns, volume delta otherwise — and
+compare it to the expected instance count. The repo's
+`macro_semantics`/`feature_verify` instance checks exist for exactly this.

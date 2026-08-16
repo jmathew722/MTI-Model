@@ -199,6 +199,30 @@ reuse Front-Plane coordinates on another plane.
 
 ---
 
+## Rule 6 — "It did not throw" is not evidence. Ever.
+
+Across two lab sessions, **six of six** discovered failure modes were silent
+(E012–E017). The API's habit is to return a feature object, or `None`, and let
+the model report clean:
+
+| What was asked for | What came back | What was actually built |
+|---|---|---|
+| through-all-both cut (enum guessed) | valid feature, rebuild clean | **the whole solid deleted** |
+| hole, selection cleared first | valid feature | nothing |
+| linear / circular pattern | `None`, no exception | nothing |
+| mirror about the wrong plane | valid feature | nothing (copy landed off the part) |
+| revolve with two centerlines | valid feature | a revolve (doc says this should fail) |
+| hole on a non-Front plane | `None` from both flips | nothing |
+
+So every feature call is followed by a measurement of the RESULT, not a check of
+the return:
+
+* additive feature → volume increased, and **body count is still 1** (a boss or
+  revolve clear of the base silently makes a second body);
+* cut → volume decreased by the expected amount;
+* hole → a cylindrical face exists at the expected (x, y, ⌀);
+* pattern → the instance COUNT increased by the expected number.
+
 ## The checklist (use this when generating a build)
 
 1. Connect, then resolve every enum with `_const`.
@@ -212,3 +236,7 @@ reuse Front-Plane coordinates on another plane.
 7. Overshoot open-edge cuts; never end a cut coincident with a face.
 8. Compute edge-referenced positions with Y up from the corner origin, and
    verify which side actually lost material.
+9. Emit exactly ONE centerline per revolve sketch and assert it — SolidWorks
+   will not reject an ambiguous axis (E016).
+10. After a pattern or mirror, count the resulting instances. Both fail silently
+    (E017), and a wrong `Mark` produces `None`, not an error.

@@ -1,0 +1,123 @@
+[
+  {
+    "step": "2.1 revolve 360deg",
+    "ok": true,
+    "detail": "volume +4.712 in^3, bodies 2",
+    "measured": {
+      "body_count": 2,
+      "bbox_in": [
+        2.0,
+        1.5,
+        2.0
+      ],
+      "com_in": [
+        4.4098,
+        1.7885,
+        0.1795
+      ],
+      "volume_in3": 16.71239,
+      "area_in2": 73.708,
+      "rebuild_clean": true
+    }
+  },
+  {
+    "step": "2.2 revolve 270deg (partial)",
+    "ok": true,
+    "detail": "volume +3.534 in^3 (a 360 of this profile adds more)",
+    "measured": {
+      "body_count": 2,
+      "bbox_in": [
+        2.0,
+        1.5,
+        2.0
+      ],
+      "com_in": [
+        4.1054,
+        1.8294,
+        0.1609
+      ],
+      "volume_in3": 15.53429,
+      "area_in2": 72.781,
+      "rebuild_clean": true
+    }
+  },
+  {
+    "step": "2.3 revolve CROSSING the axis (deliberate)",
+    "ok": true,
+    "detail": "returned None; no exception raised",
+    "measured": {}
+  },
+  {
+    "step": "2.4 revolve TWO centerlines (deliberate)",
+    "ok": false,
+    "detail": "returned <COMObject <unknown>>; no exception raised",
+    "measured": {}
+  },
+  {
+    "step": "2.5 linear pattern (Mark 4, no direction ref)",
+    "ok": false,
+    "detail": "selected=True; cyl faces 1 -> 1; ",
+    "measured": {}
+  },
+  {
+    "step": "2.6 circular pattern \u2014 correct Mark 4",
+    "ok": false,
+    "detail": "axis_sel=True feat_sel=True faces 1->1 ",
+    "measured": {}
+  },
+  {
+    "step": "2.6 circular pattern \u2014 WRONG Mark 1",
+    "ok": false,
+    "detail": "axis_sel=True feat_sel=True faces 1->1 ",
+    "measured": {}
+  },
+  {
+    "step": "2.6 mark comparison",
+    "ok": true,
+    "measured": {
+      "correct Mark 4": {
+        "axis_selected": true,
+        "feat_selected": true,
+        "feature": true,
+        "faces_before": 1,
+        "faces_after": 1,
+        "error": ""
+      },
+      "WRONG Mark 1": {
+        "axis_selected": true,
+        "feat_selected": true,
+        "feature": false,
+        "faces_before": 1,
+        "faces_after": 1,
+        "error": ""
+      }
+    }
+  },
+  {
+    "step": "2.7 mirror about Right Plane",
+    "ok": true,
+    "detail": "plane_sel=True feat_sel=True faces 1->1 ",
+    "measured": {}
+  },
+  {
+    "step": "2.8 shell 0.10 wall, 1 face removed",
+    "ok": false,
+    "detail": "volume 12.0 -> 12.0 (removed 0.0) AttributeError: <unknown>.InsertFeatureShell",
+    "measured": {
+      "body_count": 1,
+      "bbox_in": [
+        6.0,
+        4.0,
+        0.5
+      ],
+      "com_in": [
+        3.0,
+        2.0,
+        0.25
+      ],
+      "volume_in3": 12.0,
+      "area_in2": 58.0,
+      "rebuild_clean": true
+    }
+  }
+]
