@@ -1,0 +1,57 @@
+[
+  {
+    "step": "18 swCM",
+    "ok": true,
+    "detail": "fallback 1, live 1"
+  },
+  {
+    "step": "18 swDefaultTemplatePart",
+    "ok": true,
+    "detail": "fallback 8, live 8"
+  },
+  {
+    "step": "18 swINCHES",
+    "ok": true,
+    "detail": "fallback 3, live 3"
+  },
+  {
+    "step": "18 swMM",
+    "ok": true,
+    "detail": "fallback 0, live 0"
+  },
+  {
+    "step": "18 swSolidBody",
+    "ok": true,
+    "detail": "fallback 0, live 0"
+  },
+  {
+    "step": "18 swEndCondBlind",
+    "ok": true,
+    "detail": "lab recorded 0, live 0"
+  },
+  {
+    "step": "18 swEndCondThroughAll",
+    "ok": true,
+    "detail": "lab recorded 1, live 1"
+  },
+  {
+    "step": "18 swEndCondMidPlane",
+    "ok": true,
+    "detail": "lab recorded 6, live 6"
+  },
+  {
+    "step": "18 swEndCondUpToBody",
+    "ok": true,
+    "detail": "lab recorded 7, live 7"
+  },
+  {
+    "step": "18 swEndCondThroughAllBoth",
+    "ok": true,
+    "detail": "lab recorded 9, live 9"
+  },
+  {
+    "step": "verdict",
+    "ok": true,
+    "detail": "all 5 pipeline fallbacks agree with the live library, and all 5 lab-recorded end conditions still hold - no E012-class value in the codebase"
+  }
+]

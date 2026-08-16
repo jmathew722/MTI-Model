@@ -2035,31 +2035,104 @@ def build_pattern(sw_doc, model, feature: Feature, dims: dict[str, float], featu
         seed = next(iter(reversed(feature_map.values())), None)
     if seed is None:
         raise SolidWorksError(f"pattern {feature.id}: no seed feature object available to select.")
+    # VERIFIED LIVE 2026-08-16 (experiments/solidworks_practice, iterations 19-20).
+    # This path previously could not succeed. It selected the seed with
+    # ``Select4(False, ...)`` — which takes no Mark and therefore selects at Mark
+    # 0 — and selected NO direction reference at all. Measured on SolidWorks 2026,
+    # that exact configuration returns None and creates nothing, every time.
+    #
+    # The combination that DOES build (holes 1 -> 3 on an 8x3x0.375 plate):
+    #     direction edge -> Extension.SelectByID2("", "EDGE", x, y, z, True, 1, ...)
+    #     seed feature   -> Extension.SelectByID2(name, "BODYFEATURE", ..., True, 4, ...)
+    #     then FeatureLinearPattern4
+    #
+    # Both Marks matter, and the SELECTION FORM matters independently of them:
+    # ``IEntity::Select2(True, 1)`` on the same edge — same object, correct Mark —
+    # still fails, so "use Mark 1" is not the whole story and SelectByID2 is the
+    # only route measured to work. That asymmetry is unexplained; it is recorded
+    # rather than rationalised (E017, lesson 09).
     sw_doc.ClearSelection2(True)
-    try:
-        selected = seed.Select4(False, _null_dispatch())
-    except Exception as e:
-        selected = False
-        log.warning("%s: seed Select4 raised (%s)", feature.id, e)
+
+    direction_ok, direction_note = _select_pattern_direction_edge(sw_doc, model, feature)
+
+    seed_name = getattr(seed, "Name", None)
+    selected = False
+    if isinstance(seed_name, str) and seed_name:
+        try:
+            selected = bool(sw_doc.Extension.SelectByID2(
+                seed_name, "BODYFEATURE", 0, 0, 0, True, 4, _null_dispatch(), 0))
+        except Exception as e:
+            log.warning("%s: seed SelectByID2 raised (%s)", feature.id, e)
+    if not selected:
+        # Last resort only: known not to produce a usable seed reference, but a
+        # Mark-0 selection is still better than none and the None return below
+        # reports it honestly rather than building the wrong thing.
+        try:
+            selected = bool(seed.Select4(True, _null_dispatch()))
+        except Exception as e:
+            log.warning("%s: seed Select4 fallback raised (%s)", feature.id, e)
     if not selected:
         raise SolidWorksError(
             f"pattern {feature.id}: could not select its seed feature — "
             "FeatureLinearPattern4 would pattern nothing.")
 
-    # NOTE: the direction reference (DName1) is left "NULL" with no additional
-    # edge/plane selected — SolidWorks then infers direction from the seed
-    # sketch's own dimension line in some versions, but this is NOT verified
-    # live against a genuine multi-axis linear pattern (the common qty>1 hole
-    # case is realized per-instance and short-circuits via _pattern_covered_by
-    # above, so this path is rare). If FeatureLinearPattern4 returns a feature
-    # here, its DIRECTION should still be verified against the drawing.
+    # ARITY MATTERS. This call carried 18 arguments and raised
+    # "Parameter not optional" (com_error -2147352561) on every invocation — a
+    # second defect on this path, hidden behind the first because the selection
+    # was wrong too. The 20-argument form below is the one measured to build
+    # (iteration 19); the trailing pair are the direction-2 flags.
     feat = sw_doc.FeatureManager.FeatureLinearPattern4(
         count, spacing, 1, 0.0, False, False, "NULL", "NULL",
-        False, False, False, False, False, False, False, False, 0, 0,
+        False, False, False, False, False, False, True, True, False, False,
+        False, False,
     )
     if feat is None:
-        raise SolidWorksError(f"FeatureLinearPattern4 returned None for {feature.id} "
-                              "(seed was selected; direction reference may still be required).")
+        raise SolidWorksError(
+            f"FeatureLinearPattern4 returned None for {feature.id} "
+            f"(seed selected at Mark 4; direction: {direction_note}). Measured on "
+            f"SolidWorks 2026, this call needs BOTH a direction edge at Mark 1 and "
+            f"the seed at Mark 4, each set via Extension.SelectByID2.")
+    if not direction_ok:
+        _note_warning(model, f"{feature.id}: linear pattern built without a verified "
+                             f"direction edge ({direction_note}) — CHECK the pattern "
+                             f"direction against the drawing.")
+    return feat
+
+
+def _select_pattern_direction_edge(sw_doc, model, feature) -> tuple[bool, str]:
+    """Select a linear pattern's direction edge at Mark 1. Returns (ok, note).
+
+    A linear pattern needs a direction reference, and only
+    ``Extension.SelectByID2(..., "EDGE", x, y, z, ..., Mark=1, ...)`` was measured
+    to supply one (iterations 19-20). That needs a POINT ON the edge, so this
+    derives one from the part's own envelope: the midpoint of the base plate's
+    bottom edge, at the top face. Both are values the plan already knows, so no
+    number is invented here.
+
+    Never raises — a pattern without a verified direction is a flagged pattern,
+    not a blocked build (guiding principle).
+    """
+    from pipeline.macro_generator import _envelope, _model_thickness
+
+    try:
+        length, _width = _envelope(model)
+        thickness = _model_thickness(model)
+    except Exception as e:
+        return False, f"envelope unavailable ({type(e).__name__})"
+    if not length or not thickness:
+        return False, "no envelope/thickness in the plan to locate an edge from"
+
+    unit = model.units.value
+    x = to_meters(length / 2.0, unit)
+    z = to_meters(thickness, unit)
+    try:
+        ok = bool(sw_doc.Extension.SelectByID2(
+            "", "EDGE", float(x), 0.0, float(z), True, 1, _null_dispatch(), 0))
+    except Exception as e:
+        return False, f"SelectByID2 EDGE raised {type(e).__name__}"
+    if not ok:
+        return False, f"no edge at the envelope midpoint ({length / 2.0:g}, 0, {thickness:g})"
+    return True, f"edge at ({length / 2.0:g}, 0, {thickness:g}) at Mark 1"
     return feat
 
 

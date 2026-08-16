@@ -1,0 +1,22 @@
+[
+  {
+    "step": "20 Select2(append, Mark=1)  -> should BUILD",
+    "ok": false,
+    "detail": "IEntity::Select2(mark=1) on 8.00in; dir=True seed=True; holes 1->1; nothing (PREDICTION WRONG)"
+  },
+  {
+    "step": "20 Select2(append, Mark=0)  -> should FAIL",
+    "ok": true,
+    "detail": "IEntity::Select2(mark=0) on 8.00in; dir=True seed=True; holes 1->1; nothing (as predicted)"
+  },
+  {
+    "step": "20 Select4 (Mark 0 implied) -> should FAIL",
+    "ok": true,
+    "detail": "IEdge::Select4 on 8.00in (no Mark arg); dir=True seed=True; holes 1->1; nothing (as predicted)"
+  },
+  {
+    "step": "verdict",
+    "ok": false,
+    "detail": "PREDICTION WRONG: Select2 at Mark 1 does not build, so the Mark is not the whole mechanism; SelectByID2 remains the only known working route and the reason is still unexplained"
+  }
+]

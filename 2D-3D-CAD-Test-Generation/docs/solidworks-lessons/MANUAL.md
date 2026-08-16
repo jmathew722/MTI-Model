@@ -271,3 +271,14 @@ the return:
     verified over 10 radii, returned-a-feature and volume-changed agreed every
     time. Where you control the sequence, still compare volumes (rule 11); where
     a human owns the selection, `Is Nothing` alone is sufficient and rule 14 wins.
+18. **A linear pattern's direction edge must be selected with
+    `Extension.SelectByID2("", "EDGE", x, y, z, True, 1, Nothing, 0)`** — a
+    coordinate hit at Mark 1. `IEdge::Select4` returns True and is unusable, and
+    `IEntity::Select2(True, 1)` at the correct Mark ALSO fails, so the Mark is
+    necessary but not sufficient and the reason is unexplained (E017). Seed at
+    Mark 4 by name, `FeatureLinearPattern4`, **20 arguments** — 18 raises
+    "Parameter not optional". Circular patterns take an axis at Mark 1 the same
+    way.
+19. A selection call returning True is NOT evidence the selection is usable. Both
+    failing direction selections above reported success. The only proof is that
+    the feature built and the geometry changed.

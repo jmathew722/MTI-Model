@@ -323,3 +323,40 @@ Feature" and "the volume changed" agreed **every time**. The return value is a
 trustworthy signal — which is what makes the interactive fillet macro's bare
 `If swFeat Is Nothing` check sufficient in the one place where a human owns the
 selection and rule 14 forbids measuring first.
+
+### E017 (UPDATE, iteration 19-21) — linear patterns SOLVED; it was the selection form
+Previously recorded as "patterns fail silently, cause unknown". Circular patterns
+were already understood (axis at Mark 1, seed at Mark 4). Linear patterns are now
+closed too, and the cause was never a missing or broken API.
+
+**The working combination**, measured on an 8 x 3 x 0.375 plate, holes 1 -> 3:
+
+    direction -> Extension.SelectByID2("", "EDGE", x, y, z, True, 1, Nothing, 0)
+    seed      -> Extension.SelectByID2(name, "BODYFEATURE", 0,0,0, True, 4, ...)
+    call      -> FeatureLinearPattern4 with TWENTY arguments
+
+**What fails:** `IEdge::Select4` for the direction (returns True, unusable);
+`FeatureLinearPattern5` (Type mismatch under both selection forms); the 18-argument
+call (`Parameter not optional`, -2147352561).
+
+**Unexplained:** `IEntity::Select2(True, 1)` sets the correct Mark on the same
+edge object and still does not work, so "Mark 1" is necessary but not sufficient.
+The prediction that the Mark was the whole mechanism was tested and disproved;
+SelectByID2 is the only measured route. Recorded as a gap, not rationalised.
+
+**Two defects were fixed in `solidworks_builder.build_pattern`**, the second
+hidden behind the first: it selected the seed at Mark 0 with no direction
+reference at all (never able to succeed), and its call carried 18 arguments. Both
+corrected and verified through the SHIPPING code path, not just the lab recipe
+(`t16_verify_pipeline_fix.py`).
+
+### E025 — hardcoded enum fallbacks are the residual E012 risk
+**Symptom:** none observed — this entry records an audit that came back clean.
+**Cause:** `_const(name, fallback)` applies its hardcoded number exactly when the
+type library cannot be read, so a wrong fallback cannot be caught downstream.
+**Fix:** all five fallbacks in `pipeline/` (`swCM` 1, `swDefaultTemplatePart` 8,
+`swINCHES` 3, `swMM` 0, `swSolidBody` 0) were read from the live library and
+agree, as do the five E012-family end conditions. `tests/test_enum_fallbacks.py`
+re-reads them from source and fails on drift without needing SolidWorks; adding a
+new fallback requires running `t13_enum_fallback_audit.py` first. The emitted VBA
+is immune by construction — it uses named constants, never numeric literals.
