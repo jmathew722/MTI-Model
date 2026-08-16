@@ -175,6 +175,16 @@ geometry — cylindrical faces for hole patterns, volume delta otherwise — and
 compare it to the expected instance count. The repo's
 `macro_semantics`/`feature_verify` instance checks exist for exactly this.
 
+**Narrowed (iteration 9):** CIRCULAR patterns DO build once the axis is derived
+from a concentric cylindrical face and the seed is at Mark 4 (measured: faces
+3 -> 6, four instances; Mark 1 instead gives `None` and nothing). LINEAR patterns
+remain unexplained: `GetIDsOfNames` finds dispids for `FeatureLinearPattern`
+through `FeatureLinearPattern5`, so the API is present, yet
+`FeatureLinearPattern4` with an edge at Mark 1 and the seed at Mark 4 returns
+`None` and creates nothing. Prefer sketching every hole at its computed centre in
+ONE sketch and cutting once — measured exact, one feature, no prerequisites, and
+no silent-failure mode (see lesson 06).
+
 ### E018 — `callable()` is not a valid method-vs-property test under win32com
 **Symptom:** `IModelDoc2.FirstFeature` raised `Member not found (-2147352573)`
 when read through a helper of the form `v() if callable(v) else v`. Downstream,
@@ -228,7 +238,9 @@ neither `InsertFeatureShell` nor `InsertFeatureShell2` on the FeatureManager.
 **Cause:** unknown — the method is documented for this interface but does not
 resolve through dynamic dispatch on this install (compare E018, where a member
 existed but needed a different access form; here it is absent entirely).
-**Fix:** none found. Shell is untested on this machine. If a drawing needs a
-shell, treat it as an unsupported feature kind and escalate rather than emitting
-a call that will raise. Try the raw-dispid Invoke form first (it rescued
-`IFace2.GetSurface`) before concluding the API is unavailable.
+**Fix:** none — CONFIRMED absent (iteration 9). The suggested raw-dispid Invoke
+route was tested and does NOT rescue it: `GetIDsOfNames` finds no dispid for
+`InsertFeatureShell`, `InsertFeatureShell2`, `InsertShell`, `FeatureShell` or
+`InsertFeatureShellByFace`. The method is not on this `IFeatureManager` in any
+access form. Treat shell as an unsupported feature kind and escalate rather than
+emitting a call that will raise.

@@ -11,6 +11,7 @@ documentation. Lab notebook: `experiments/solidworks_practice/`.
 | [02_cut_and_hole_placement.md](02_cut_and_hole_placement.md) | The verified cut recipe, and measured hole/edge-notch placement on all four edges of one block. |
 | [03_revolve_patterns_mirror_shell.md](03_revolve_patterns_mirror_shell.md) | Revolve verified (360°/270°, +second body); circular pattern RESOLVED with the Mark answer; two centerlines do not fail a revolve. |
 | [05_multifeature_part_and_validation.md](05_multifeature_part_and_validation.md) | Tier 4: a bracket built in plan order, graded PASS by `pipeline.validation`, and the hole audit catching a 2x diameter. |
+| [06_bolt_circles_and_remaining_gaps.md](06_bolt_circles_and_remaining_gaps.md) | Bolt circle two ways — one sketch beats a pattern; shell confirmed absent; linear pattern still unexplained. |
 | [04_deliberate_failures.md](04_deliberate_failures.md) | Tier 5, 5/5: what a unit slip, an open sketch, an oversized fillet, a detached boss and a stale name actually do. |
 
 ## What was measured
@@ -35,6 +36,11 @@ documentation. Lab notebook: `experiments/solidworks_practice/`.
   -> notch -> 4 holes -> fillets last), graded **PASS** by the real
   `pipeline.validation` scorecard, with the hole audit **catching** a
   deliberately doubled hole diameter.
+* Iteration 9 closed the Tier-3 bolt-circle comparison: **four circles in one
+  sketch + one cut** places all four holes exactly, with one feature and no
+  prerequisites — independently confirming the construction this pipeline
+  already uses. Shell is confirmed absent (no dispid, five name variants);
+  linear patterns remain unexplained.
 
 ## New entries added to the error ledger
 E012–E021 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md).

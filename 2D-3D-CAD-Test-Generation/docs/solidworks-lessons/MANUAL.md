@@ -246,3 +246,7 @@ the return:
     whole feature a silent no-op (E020). Compare volume before and after.
 12. Prefer a reference plane over face hunting — verified identical to sketching
     on a standard plane, and deterministic.
+13. For a bolt circle or any hole group, sketch EVERY hole at its computed centre
+    in one sketch and cut once. Measured exact, one feature, no prerequisites,
+    and no silent-failure mode — a circular pattern needs a concentric face for
+    its axis and fails silently when a Mark is wrong.

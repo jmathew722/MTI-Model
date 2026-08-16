@@ -1,0 +1,42 @@
+[
+  {
+    "step": "9.A shell API discovery",
+    "ok": false,
+    "detail": "getattr-present=[]; dispids={'InsertFeatureShell': 'com_error', 'InsertFeatureShell2': 'com_error', 'InsertShell': 'com_error', 'FeatureShell': 'com_error', 'InsertFeatureShellByFace': 'com_error'}"
+  },
+  {
+    "step": "9.B linear-pattern API discovery",
+    "ok": true,
+    "detail": "{\"FeatureLinearPattern\": \"dispid found\", \"FeatureLinearPattern2\": \"dispid found\", \"FeatureLinearPattern3\": \"dispid found\", \"FeatureLinearPattern4\": \"dispid found\", \"FeatureLinearPattern5\": \"dispid found\", \"FeatureCircularPattern5\": \"dispid found\"}"
+  },
+  {
+    "step": "9.B linear pattern retry (edge Mark 1 + seed Mark 4)",
+    "ok": false,
+    "detail": "edge=True seed=True faces 1->1 feature=False "
+  },
+  {
+    "step": "9.C way 1: 4 circles in ONE sketch + 1 cut",
+    "ok": true,
+    "detail": "features=1, faces 0->4, holes at [(1.0, 3.0), (3.0, 1.0), (3.0, 5.0), (5.0, 3.0)]"
+  },
+  {
+    "step": "9.C way 2: seed + circular pattern",
+    "ok": false,
+    "detail": "features=4 (bore+seed+axis+pattern), axis='Axis1', faces 5->5 (+0) "
+  },
+  {
+    "step": "9.C comparison",
+    "ok": true,
+    "detail": "{\"one_sketch\": {\"features\": 1, \"holes\": 4, \"worked\": true, \"prerequisites\": \"none\"}, \"circular_pattern\": {\"features\": 4, \"gained\": 0, \"worked\": false, \"prerequisites\": \"a concentric cylindrical face to derive the axis from\"}}"
+  },
+  {
+    "step": "9.D chamfer 0.05 x 45deg on ONE edge",
+    "ok": false,
+    "detail": "vol 13.09043 -> 13.09043 "
+  },
+  {
+    "step": "9.D fillet R.0625 on ONE edge (vs all-edges no-op)",
+    "ok": false,
+    "detail": "vol 13.09043 -> 13.09043 "
+  }
+]
