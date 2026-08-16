@@ -50,9 +50,31 @@ feat = doc.FeatureManager.FeatureRevolve2(
 | Revolve with the profile **crossing the axis** | returns `None`, **no exception** — matches doc 06's warning, but note it is silent, not an error |
 | Revolve with **two centerlines** | **SUCCEEDED** — a feature was created. This CONTRADICTS doc 06, which says two centerlines make the axis ambiguous and the revolve fail. On this install SolidWorks picks one and builds. Recorded as E016. |
 
-## Not verified — and why (honest gaps)
+## RESOLVED in iteration 7 — circular patterns build, and the Mark answer
 
-* **Linear and circular patterns did not build.** With the seed selected as
+The blocker was never the pattern call. Two bugs stacked:
+
+1. the bore-face search matched the round plate's **outer** cylindrical wall
+   (concentric with the bore), so `InsertAxis2` got the wrong face — fixed by
+   matching on **radius as well as centre**;
+2. the feature-tree walk used `callable()` to choose method-vs-property, and a
+   COM object returned by a property is *itself callable*, so `FirstFeature` was
+   being CALLED and raising `Member not found`. The axis existed the whole time
+   (`Axis1 | RefAxis`, confirmed by dumping the tree).
+
+With both fixed, on a Ø6 plate with a Ø1 bore and one Ø0.3 seed hole:
+
+| Selection | Returned | Cylindrical faces |
+|---|---|---|
+| axis Mark 1 + seed **Mark 4** | a feature | **3 → 6** (+3, four instances) |
+| axis Mark 1 + seed **Mark 1** | **`None`** | 3 → 3 (+0) |
+
+So doc 06's "Marks are suspect #1" is **confirmed**, and the symptom is a silent
+`None` — never an error.
+
+## Still not verified (honest gaps)
+
+* **Linear patterns** were not retried after the axis fix. With the seed selected as
   `BODYFEATURE` Mark 4 and a direction/axis at Mark 1, both
   `FeatureLinearPattern4` and `FeatureCircularPattern5` (14-arg tlb signature,
   dispid 261) returned `None` with **no exception**, and the cylindrical-face

@@ -47,27 +47,39 @@ DEG = math.pi / 180.0
 def sw_get(owner, name: str, *args):
     """Read a SolidWorks member that may be a METHOD or a PROPERTY.
 
-    THE core empirical finding of this lab (Tier 0). Under win32com late binding
-    the same SolidWorks member is exposed differently depending on the member:
+    THE core empirical finding of this lab, and it was WRONG in its first form.
+
+    Under win32com late binding the same SolidWorks member is exposed
+    differently per member:
 
         IModelDoc2.GetMassProperties  -> PROPERTY (a tuple).  doc.GetMassProperties
         IBody2.GetFaces               -> METHOD.              body.GetFaces()
-        IBody2.Name                   -> PROPERTY.            body.Name
+        IModelDoc2.FirstFeature       -> PROPERTY (an object).doc.FirstFeature
         IFace2.GetArea                -> PROPERTY (a float).  face.GetArea
 
-    Calling a property raises ``TypeError: 'tuple' object is not callable``;
-    reading a method returns a bound method rather than the value. Neither
-    failure looks like "wrong access form" at a glance — the first looks like a
-    type bug, the second silently yields a method object that later compares
-    False. Any code that assumes one form will break on half of these members.
+    The obvious discriminator — `if callable(attr): attr()` — DOES NOT WORK.
+    win32com dynamic objects define __call__, so a COM object returned by a
+    property (`IModelDoc2.FirstFeature`) reports as callable, gets called, and
+    raises "Member not found" (-2147352573). That cost an iteration: the axis
+    was being created correctly and the tree walk was what failed.
 
-    Rule: prefer the CALL when the attribute is callable, else take the value.
-    Raises AttributeError only when the member genuinely does not exist.
+    Correct rule: TRY the call; if the member is not callable at all, or the
+    call reports Member not found / Parameter not optional, use the attribute
+    value instead.
     """
     attr = getattr(owner, name)          # AttributeError = genuinely absent
-    if callable(attr):
+    if not callable(attr):
+        return attr
+    try:
         return attr(*args)
-    return attr
+    except Exception as e:
+        # A property whose value is itself a COM object looks callable.
+        if args:
+            raise
+        text = str(e)
+        if "Member not found" in text or "Parameter not optional" in text:
+            return attr
+        raise
 
 
 def sw_invoke(owner, name: str):

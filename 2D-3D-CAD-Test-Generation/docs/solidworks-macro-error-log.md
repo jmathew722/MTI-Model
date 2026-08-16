@@ -174,3 +174,37 @@ A wrong or missing selection is not an error condition to SolidWorks.
 geometry — cylindrical faces for hole patterns, volume delta otherwise — and
 compare it to the expected instance count. The repo's
 `macro_semantics`/`feature_verify` instance checks exist for exactly this.
+
+### E018 — `callable()` is not a valid method-vs-property test under win32com
+**Symptom:** `IModelDoc2.FirstFeature` raised `Member not found (-2147352573)`
+when read through a helper of the form `v() if callable(v) else v`. Downstream,
+a feature-tree walk found nothing, and a reference axis that HAD been created
+successfully (`Axis1 | RefAxis`, confirmed by dumping the tree) was reported as
+missing — which in turn made a working circular pattern look impossible.
+**Cause:** win32com dynamic objects define `__call__`. A COM OBJECT returned by
+a property is therefore "callable", so the helper calls it.
+**Fix:** try the call and fall back to the attribute value:
+```python
+attr = getattr(owner, name)
+if not callable(attr):
+    return attr
+try:
+    return attr(*args)
+except Exception as e:
+    if not args and ("Member not found" in str(e)
+                     or "Parameter not optional" in str(e)):
+        return attr        # a property whose value is a COM object
+    raise
+```
+Note `solidworks_builder._prop` uses the naive form. It is safe where it is used
+today (its values are tuples and bools) but is the same latent trap.
+
+### E019 — an extrude with the sketch left OPEN succeeds (doc contradiction)
+**Symptom:** deliberately skipping the closing `InsertSketch(True)` before
+`FeatureExtrusion3` produced a valid feature with no exception.
+**Cause:** SolidWorks consumes the still-open active sketch. Reference doc 08
+lists "sketch still open" as a cause of a null return; that is not the behaviour
+here.
+**Fix:** none needed for a boss — but do NOT generalise it: the COM **cut** path
+does require the sketch closed and selected (E014). Boss and cut are not
+symmetric. Close the sketch in both cases so one rule covers both.

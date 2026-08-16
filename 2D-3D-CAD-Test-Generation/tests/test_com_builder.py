@@ -394,3 +394,69 @@ class TestComRetry:
         import inspect
 
         assert "com_retry" in inspect.getsource(swb.check_rebuild_errors)
+
+
+class TestPropAccessor:
+    """E018 — `callable()` is not a method-vs-property test under win32com.
+
+    Proved in the hands-on lab: a COM object returned by a PROPERTY defines
+    __call__, so the naive `v() if callable(v) else v` calls it and raises
+    "Member not found". That made a reference axis that HAD been created look
+    missing, which in turn made a working circular pattern look impossible.
+    """
+
+    def _prop(self):
+        # the helper is defined inside build_circular_pattern_holes; exercise the
+        # same logic through a local copy kept in step with it
+        def _p(obj, name):
+            v = getattr(obj, name)
+            if not callable(v):
+                return v
+            try:
+                return v()
+            except Exception as e:
+                if "Member not found" in str(e) or "Parameter not optional" in str(e):
+                    return v
+                raise
+        return _p
+
+    def test_a_plain_property_is_returned(self):
+        class O:
+            CylinderParams = (1.0, 2.0, 3.0)
+
+        assert self._prop()(O(), "CylinderParams") == (1.0, 2.0, 3.0)
+
+    def test_a_real_method_is_called(self):
+        class O:
+            def GetFaces(self):
+                return ["f1", "f2"]
+
+        assert self._prop()(O(), "GetFaces") == ["f1", "f2"]
+
+    def test_a_callable_com_object_property_is_NOT_called(self):
+        """The E018 case: the value is an object that happens to be callable."""
+        class ComObject:
+            def __call__(self, *a):
+                raise Exception("Member not found")
+
+            name = "Axis1"
+
+        class Owner:
+            FirstFeature = ComObject()
+
+        got = self._prop()(Owner(), "FirstFeature")
+        assert isinstance(got, ComObject) and got.name == "Axis1"
+
+    def test_a_genuine_error_still_propagates(self):
+        class O:
+            def Boom(self):
+                raise ValueError("zero-thickness geometry")
+
+        with pytest.raises(ValueError):
+            self._prop()(O(), "Boom")
+
+    def test_the_shipped_helper_has_the_fallback(self):
+        import inspect
+
+        src = inspect.getsource(swb.build_circular_pattern_holes)
+        assert "Member not found" in src, "the _prop fallback (E018) is missing"

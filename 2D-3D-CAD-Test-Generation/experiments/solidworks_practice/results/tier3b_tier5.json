@@ -1,0 +1,52 @@
+[
+  {
+    "step": "7.1 plate + bore + seed",
+    "ok": true,
+    "detail": "3 cyl faces: [(0.0, 0.0, 6.0), (0.0, 0.0, 1.0), (2.0, 0.0, 0.3)]"
+  },
+  {
+    "step": "7.2 axis from BORE (radius-matched)",
+    "ok": true,
+    "detail": "face_selected=True InsertAxis2=True axis='Axis1'"
+  },
+  {
+    "step": "7.3 circular pattern \u2014 correct Mark 4",
+    "ok": true,
+    "detail": "feature=True faces 3->6 (+3) "
+  },
+  {
+    "step": "7.3 circular pattern \u2014 WRONG Mark 1",
+    "ok": false,
+    "detail": "feature=False faces 3->3 (+0) "
+  },
+  {
+    "step": "7.3 mark comparison",
+    "ok": true,
+    "detail": "{\"correct Mark 4\": {\"axis_sel\": true, \"seed_sel\": true, \"feature\": true, \"faces\": [3, 6], \"gained\": 3, \"error\": \"\"}, \"WRONG Mark 1\": {\"axis_sel\": true, \"seed_sel\": true, \"feature\": false, \"faces\": [3, 3], \"gained\": 0, \"error\": \"\"}}"
+  },
+  {
+    "step": "5.1 mm passed as metres",
+    "ok": true,
+    "detail": "bbox [1971.5039, 6.0, 984.752] in \u2014 a 50 mm rectangle became 1972 in (50 m)"
+  },
+  {
+    "step": "5.2 extrude with the sketch left OPEN",
+    "ok": true,
+    "detail": "returned a feature; no exception"
+  },
+  {
+    "step": "5.3 fillet R5.0 on a 0.5-thick plate",
+    "ok": true,
+    "detail": "6 edges selected; returned None; no exception"
+  },
+  {
+    "step": "5.4 boss not touching the base",
+    "ok": true,
+    "detail": "body_count = 2 (a body-count check catches this)"
+  },
+  {
+    "step": "5.5 SelectByID2 on a stale name",
+    "ok": true,
+    "detail": "returned False (type bool) \u2014 falsy, never raises"
+  }
+]

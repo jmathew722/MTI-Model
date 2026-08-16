@@ -1433,8 +1433,24 @@ def build_circular_pattern_holes(sw_doc, model, feature: Feature, h, probe: dict
             ole.Invoke(ole.GetIDsOfNames("GetSurface"), 0, flags, True))
 
     def _prop(obj, name):
+        """Read a member that may be a method OR a property.
+
+        `callable(v)` alone is NOT a valid discriminator (E018, proved in the
+        hands-on lab 2026-08-16): win32com dynamic objects define __call__, so a
+        COM OBJECT returned by a property reports as callable and gets called,
+        raising "Member not found". Safe for the tuple/bool values used here, but
+        the naive form silently breaks on any object-valued property — so the
+        fallback is written in rather than left as a trap for the next caller.
+        """
         v = getattr(obj, name)
-        return v() if callable(v) else v
+        if not callable(v):
+            return v
+        try:
+            return v()
+        except Exception as e:
+            if "Member not found" in str(e) or "Parameter not optional" in str(e):
+                return v
+            raise
 
     bore_r_m = to_meters(probe["bore_radius"], unit)
     cx_m = to_meters(probe["cx"], unit)
