@@ -262,3 +262,12 @@ the return:
 15. When an experiment says working code is wrong, run the comparison the
     experiment skipped before you change anything (E023). A sweep that stops at
     its first success has said nothing about the values it never tried.
+16. **A fillet or chamfer must be strictly less than half the material
+    thickness.** Measured on a 0.5 in plate: R0.24 builds, R0.26 returns `None`
+    and changes nothing (E024). Two opposite edges of a through edge each consume
+    the radius. Check the callout against the thickness before you build, not
+    after it fails.
+17. A returned Feature object from `FeatureFillet3` is a TRUSTWORTHY signal —
+    verified over 10 radii, returned-a-feature and volume-changed agreed every
+    time. Where you control the sequence, still compare volumes (rule 11); where
+    a human owns the selection, `Is Nothing` alone is sufficient and rule 14 wins.

@@ -52,8 +52,19 @@ documentation. Lab notebook: `experiments/solidworks_practice/`.
   as E023 — a sweep that stopped at its first success almost got working
   pipeline code "fixed". The pipeline itself was audited and is unaffected.
 
+* Iterations 16–17 ([lesson 08](08_auditing_the_emitted_macros.md)) turned the
+  manual back on **this pipeline's own emitted macros**, auditing the checked-in
+  golden package rule by rule. Most of it came back clean, including the
+  `MsgBox` question (those macros are human-run by design, so a modal error is
+  correct) and the interactive fillet macro's bare `Is Nothing` check — which a
+  10-radius sweep proved sufficient, since "returned a Feature" and "the volume
+  changed" agreed every time. That sweep also produced **E024**: an edge
+  treatment must be strictly less than half the material thickness (R0.24 builds
+  on a 0.5 plate, R0.26 silently does not), now checked at plan time by
+  `validator._check_edge_treatment_radius`.
+
 ## New entries added to the error ledger
-E012–E023 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md),
+E012–E024 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md),
 one of them (E020) retracted and kept as a worked example of a false finding.
 **Every live failure mode is silent** — a feature object comes back, or `None`
 comes back with no exception, and the model reports clean. That is the single

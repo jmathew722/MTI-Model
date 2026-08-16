@@ -295,3 +295,31 @@ route was tested and does NOT rescue it: `GetIDsOfNames` finds no dispid for
 `InsertFeatureShellByFace`. The method is not on this `IFeatureManager` in any
 access form. Treat shell as an unsupported feature kind and escalate rather than
 emitting a call that will raise.
+
+### E024 — an edge treatment at or past half the material thickness does nothing
+**Symptom:** `FeatureFillet3` returns `None`, raises nothing, and the volume is
+unchanged — for a radius that looks perfectly reasonable on the drawing.
+**Cause:** the two opposite edges of a through edge each consume the radius, so a
+fillet needs `R < thickness / 2`. Measured on a 4.0 x 3.0 x 0.5 in plate, all 12
+edges, each radius from an independent clean state (iteration 16,
+`t12_return_value_trust.py`):
+
+    R0.01 -> built     R0.20 -> built     R0.26 -> None     R1.00 -> None
+    R0.0625 -> built   R0.24 -> built     R0.30 -> None     R5.00 -> None
+    R0.125 -> built                       R0.50 -> None
+
+The last radius that builds is 0.24 and the first that fails is 0.26 on a 0.5
+plate. The boundary value itself (0.25) is not established either way.
+**Fix:** `pipeline/validator.py::_check_edge_treatment_radius` now warns at PLAN
+time when a fillet radius or chamfer distance is not strictly less than half the
+material thickness, naming both numbers, so it reaches the engineering report
+before anyone opens SolidWorks. Advisory, never blocking — the drawing is the
+authority and the callout may be intended for a thicker edge. The COM builder's
+existing post-failure message stays as the backstop. Pinned by
+`tests/test_edge_treatment_radius.py`.
+
+**Corollary worth its own note:** across those same 10 radii, "returned a
+Feature" and "the volume changed" agreed **every time**. The return value is a
+trustworthy signal — which is what makes the interactive fillet macro's bare
+`If swFeat Is Nothing` check sufficient in the one place where a human owns the
+selection and rule 14 forbids measuring first.

@@ -346,6 +346,61 @@ def _check_unmodeled_fillets(model: DrawingData, report: ValidationReport) -> No
         )
 
 
+def _check_edge_treatment_radius(model: DrawingData, report: ValidationReport) -> None:
+    """Advisory: a fillet/chamfer too large for the material it runs along.
+
+    MEASURED on SolidWorks 2026 (`experiments/solidworks_practice/`, iteration
+    16): filleting the edges of a 0.5 in plate succeeds at R0.24 and fails at
+    R0.26 — the limit is R < thickness/2, because the two opposite edges of a
+    through edge each consume the radius. Past that, ``FeatureFillet3`` returns
+    ``None``, raises nothing, and no geometry changes.
+
+    The COM builder already reports this, but only AFTER the failure and only if
+    the build runs. Saying it at plan time puts it in the engineering report and
+    in the macro package's own warnings, where a human sees it before opening
+    SolidWorks. Advisory by design — the drawing is the authority, the callout
+    may be intended for an edge thicker than the base plate, and per the guiding
+    principle a flagged approximate model beats a blocked one.
+    """
+    thickness = _edge_treatment_thickness(model)
+    if thickness <= 0:
+        return                       # nothing to compare against; say nothing
+    limit = thickness / 2.0
+    for f in model.features:
+        if f.type not in (FeatureType.FILLET, FeatureType.CHAMFER):
+            continue
+        dims = {d.canonical_applies_to or d.applies_to or "": d.value
+                for d in model.dimensions if d.id in (f.related_dimensions or [])}
+        size = next((v for k, v in dims.items()
+                     if v and any(t in (k or "").lower()
+                                  for t in ("radius", "fillet", "chamfer", "length"))), None)
+        if not size or size < limit:
+            continue
+        kind = "fillet radius" if f.type == FeatureType.FILLET else "chamfer distance"
+        report.warn(
+            f"{f.id}: {kind} {size:g} is not less than half the {thickness:g} material "
+            f"thickness ({limit:g}) — measured on this SolidWorks release, an edge "
+            f"treatment at or past half thickness silently does nothing (the call "
+            f"returns no feature). Verify the callout applies to a thicker edge, or "
+            f"expect this feature to be reported as not applied."
+        )
+
+
+def _edge_treatment_thickness(model: DrawingData) -> float:
+    """Base-solid thickness in drawing units, or 0.0 when it is not known.
+
+    Deliberately delegates to the macro generator's ``_model_thickness`` so there
+    is ONE answer to "how thick is this part" — a second local implementation is
+    exactly how the dimension-collision bug got two different widths.
+    """
+    try:
+        from pipeline.macro_generator import _model_thickness
+
+        return float(_model_thickness(model) or 0.0)
+    except Exception:
+        return 0.0
+
+
 def _check_view_consistency(model: DrawingData, report: ValidationReport) -> None:
     """v2 (advisory): views' dimension lists should reference real dimensions."""
     dim_ids = {d.id for d in model.dimensions}
@@ -458,6 +513,7 @@ def run_verification(
     _check_reference_dimensions(model, report)
     _check_instance_positions(model, report)
     _check_unmodeled_fillets(model, report)
+    _check_edge_treatment_radius(model, report)
     _check_mirror_features(model, report)
     _check_view_consistency(model, report)
 
