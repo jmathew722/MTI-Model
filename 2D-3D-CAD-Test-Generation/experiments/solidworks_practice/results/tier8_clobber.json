@@ -1,0 +1,32 @@
+[
+  {
+    "step": "12 selection survives: GetMassProperties (lab.measure)",
+    "ok": false,
+    "detail": "selected 12 -> 0  <-- CLOBBERS THE SELECTION"
+  },
+  {
+    "step": "12 selection survives: GetBodies2 / body enumeration",
+    "ok": true,
+    "detail": "selected 12 -> 12"
+  },
+  {
+    "step": "12 selection survives: read doc.Extension.Something",
+    "ok": true,
+    "detail": "selected 12 -> 12"
+  },
+  {
+    "step": "12 selection survives: FeatureManager.GetFeatureCount",
+    "ok": true,
+    "detail": "selected 12 -> 12"
+  },
+  {
+    "step": "12 end-to-end fillet, no measure between",
+    "ok": true,
+    "detail": "12 edges; vol 6.0 -> 5.98407; returned feature"
+  },
+  {
+    "step": "12 end-to-end fillet, measure between",
+    "ok": false,
+    "detail": "12 edges; vol 6.0 -> 6.0; returned None"
+  }
+]

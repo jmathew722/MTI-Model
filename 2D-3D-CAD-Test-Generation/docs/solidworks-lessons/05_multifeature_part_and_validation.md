@@ -50,12 +50,15 @@ reliance on what the script intended.
 
 ## Gotchas found empirically
 
-* **Selecting ALL edges makes `FeatureFillet3` a silent no-op.** 44 edges were
-  selected on the finished bracket; the call raised nothing and the volume was
-  unchanged (5.83808 → 5.83808). Doc 10's advice to fillet edge-by-edge and skip
-  the failures is not a style preference — an all-edges fillet on a part with
-  any incompatible edge produces *nothing at all*, not a partial result.
-  Recorded as E020.
+* ~~**Selecting ALL edges makes `FeatureFillet3` a silent no-op.**~~
+  **RETRACTED — this finding was wrong.** 44 edges were selected on the finished
+  bracket and the volume was unchanged (5.83808 → 5.83808), but the cause was
+  this script, not SolidWorks: it measures the volume at line 159, *between*
+  selecting the edges at 155 and calling the fillet at 162. The measurement
+  forces a rebuild, the rebuild clears the selection, and the fillet ran against
+  nothing. Re-tested properly in iteration 14 an all-edges fillet builds fine,
+  including over circular hole edges. See E020 (retracted), E022 (the real
+  mechanism) and lesson 07.
 * **`InsertFeatureShell` is not exposed** on `IFeatureManager` here —
   `hasattr` finds neither `InsertFeatureShell` nor `InsertFeatureShell2`, and
   calling it raises `AttributeError`. Shell could not be tested. Recorded as
@@ -69,8 +72,9 @@ reliance on what the script intended.
 
 * Doc 06 right: reference planes are a deterministic alternative to face
   hunting, and sketching on one is identical to a standard plane. Confirmed.
-* Doc 05 right: fillets belong last — and doc 10's edge-by-edge advice is
-  stronger than it sounds (see E020).
+* Doc 05 right: fillets belong last. Doc 10's edge-by-edge advice is sound for
+  *reporting* which edges were skipped, but it is not a workaround for a defect —
+  see the retraction above.
 * Doc 07's volume-ratio fingerprint is useful and cheap; 62.3% for this part.
 
 ## Confidence

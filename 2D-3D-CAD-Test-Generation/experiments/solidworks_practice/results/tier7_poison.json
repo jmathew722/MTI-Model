@@ -1,0 +1,22 @@
+[
+  {
+    "step": "11.A clean part -> legal R.05 (control)",
+    "ok": true,
+    "detail": "12 edges; vol 6.0 -> 5.98407; returned feature"
+  },
+  {
+    "step": "11.B after a failed fillet -> legal R.05",
+    "ok": true,
+    "detail": "bad returned None; 12 edges; vol 6.0 -> 5.98407; returned feature"
+  },
+  {
+    "step": "11.C failed fillet -> recovery -> legal R.05",
+    "ok": true,
+    "detail": "recovery=[ClearSelection2, EditRebuild3!TypeError]; 12 edges; vol 6.0 -> 5.98407; returned feature"
+  },
+  {
+    "step": "verdict",
+    "ok": null,
+    "detail": "NO poisoning - a failed call does not block the next one"
+  }
+]

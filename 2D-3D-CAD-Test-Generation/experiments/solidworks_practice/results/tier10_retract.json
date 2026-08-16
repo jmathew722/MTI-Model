@@ -1,0 +1,22 @@
+[
+  {
+    "step": "14.A E020 re-test: all-edges fillet R.0625",
+    "ok": true,
+    "detail": "20 edges (incl. hole edges); vol 5.45933 -> 5.42309; returned feature   => E020 RETRACTED"
+  },
+  {
+    "step": "14.B 9.D re-test: SINGLE-edge fillet R.0625",
+    "ok": true,
+    "detail": "1 straight edge sel=True; vol 5.45933 -> 5.45514; returned feature"
+  },
+  {
+    "step": "14.B 9.D re-test: SINGLE-edge chamfer .0625",
+    "ok": false,
+    "detail": "1 straight edge sel=True; vol 5.45514 -> 5.45514; returned None"
+  },
+  {
+    "step": "verdict",
+    "ok": null,
+    "detail": "E020 RETRACTED (all-edges fillet works); single-edge treatments still fail"
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "step": "13 selection survives IModelDoc2.GetMassProperties  (my lab harness)",
+    "ok": true,
+    "detail": "selected 12 -> 12"
+  },
+  {
+    "step": "13 selection survives IBody2.GetMassProperties      (the PIPELINE)",
+    "ok": true,
+    "detail": "selected 12 -> 12   [pipeline uses this]"
+  },
+  {
+    "step": "13 end-to-end fillet after a BODY-level measure",
+    "ok": true,
+    "detail": "12 edges; returned feature; vol_in3=5.98407"
+  }
+]

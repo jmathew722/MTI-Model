@@ -1,0 +1,17 @@
+[
+  {
+    "step": "10.A oversized all-edges fillet: what comes back?",
+    "ok": true,
+    "detail": "12 edges; returned None; vol 6.0 -> 6.0; no exception"
+  },
+  {
+    "step": "10.A legal all-edges fillet R.05 on a clean plate",
+    "ok": false,
+    "detail": "returned None; vol 6.0 -> 6.0"
+  },
+  {
+    "step": "10.B linear pattern, longest straight edge as direction",
+    "ok": false,
+    "detail": "edge_len=8.00in dir_sel=True seed_sel=True faces 1->1 returned=None "
+  }
+]

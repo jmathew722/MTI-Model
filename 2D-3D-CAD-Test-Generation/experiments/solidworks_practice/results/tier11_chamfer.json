@@ -1,0 +1,12 @@
+[
+  {
+    "step": "15 chamfer opts=0 type=1 AngleDistance",
+    "ok": true,
+    "detail": "vol 5.625 -> 5.61523; returned feature"
+  },
+  {
+    "step": "verdict",
+    "ok": true,
+    "detail": "WORKS with Options=0 (none), ChamferType=1 (AngleDistance). The pipeline passes Options=4, ChamferType=1."
+  }
+]

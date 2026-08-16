@@ -1,0 +1,25 @@
+[
+  {
+    "options": 4,
+    "built": true,
+    "detail": "vol 5.625 -> 5.61523; returned feature"
+  },
+  {
+    "options": 0,
+    "built": true,
+    "detail": "vol 5.625 -> 5.61523; returned feature"
+  },
+  {
+    "options": 4,
+    "built": false,
+    "detail": "vol 5.61523 -> 5.61523; returned None"
+  },
+  {
+    "options": 0,
+    "built": false,
+    "detail": "vol 5.61523 -> 5.61523; returned None"
+  },
+  {
+    "verdict": "inconclusive: 4=True, 0=True, 4=False, 0=False"
+  }
+]

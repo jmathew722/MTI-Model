@@ -242,11 +242,23 @@ the return:
    will not reject an ambiguous axis (E016).
 10. After a pattern or mirror, count the resulting instances. Both fail silently
     (E017), and a wrong `Mark` produces `None`, not an error.
-11. Fillet edge-by-edge, never all-edges-at-once: one incompatible edge makes the
-    whole feature a silent no-op (E020). Compare volume before and after.
+11. Compare the volume before and after every fillet — the return value does not
+    distinguish "filleted everything" from "did nothing". All-edges fillets DO
+    work, including over circular hole edges (E020 was retracted in iteration
+    14); go edge-by-edge when you want to report which edges were skipped, not
+    because the grouped call is broken.
 12. Prefer a reference plane over face hunting — verified identical to sketching
     on a standard plane, and deterministic.
 13. For a bolt circle or any hole group, sketch EVERY hole at its computed centre
     in one sketch and cut once. Measured exact, one feature, no prerequisites,
     and no silent-failure mode — a circular pattern needs a concentric face for
     its axis and fails silently when a Mark is wrong.
+14. **Collect topology, select, and call with NOTHING in between.** A rebuild —
+    including any measurement helper that forces one — clears the selection AND
+    disconnects edge/face pointers you already hold, so the call runs against an
+    empty selection and returns `None` (E022). Do all measuring and logging
+    before you start selecting. The natural "select, verify, then build" order is
+    the one that breaks; it faked two findings in this lab before it was caught.
+15. When an experiment says working code is wrong, run the comparison the
+    experiment skipped before you change anything (E023). A sweep that stops at
+    its first success has said nothing about the values it never tried.

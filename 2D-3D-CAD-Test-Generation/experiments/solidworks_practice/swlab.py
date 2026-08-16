@@ -204,7 +204,19 @@ class Lab:
         return list(got) if isinstance(got, (list, tuple)) else [got]
 
     def measure(self, doc) -> dict[str, Any]:
-        """Body count + bbox (inches) + volume (in^3) straight from the model."""
+        """Body count + bbox (inches) + volume (in^3) straight from the model.
+
+        DESTROYS THE CURRENT SELECTION. This ends with ``check_rebuild_errors``,
+        which forces a rebuild, and a rebuild both clears the selection and
+        disconnects any edge/face pointers you are already holding (E022).
+
+        Never call this between selecting geometry and calling the feature — the
+        feature will run against an empty selection and return ``None`` with no
+        exception. Measure FIRST, then collect topology, select, and call with
+        nothing in between. This exact mistake manufactured two false findings
+        in this lab (retracted E020, and iteration 9's single-edge fillet gap);
+        see docs/solidworks-lessons/07_the_selection_is_fragile.md.
+        """
         out: dict[str, Any] = {}
         bodies = self.bodies(doc)
         out["body_count"] = len(bodies)

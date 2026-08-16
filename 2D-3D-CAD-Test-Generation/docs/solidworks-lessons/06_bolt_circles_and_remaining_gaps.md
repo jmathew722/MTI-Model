@@ -62,16 +62,19 @@ no silent-failure mode.
   the seed at Mark 4 returns `None`, raises nothing, and creates no geometry.
   Narrows E017 but does not close it. Circular patterns work under the same
   discipline; use those, or Way 1 above.
-* **Single-edge fillet and chamfer did not change the volume** in this run,
-  though the all-edges fillet DID work in Tier 1 (6.0 → 5.93696 in³). The
-  difference is the part: this plate carries four through holes, and the first
-  edge the selector picked is likely a hole's circular edge that cannot take the
-  radius. Not enough evidence to draw a rule — recorded as unresolved rather
-  than turned into guidance.
+* ~~**Single-edge fillet and chamfer did not change the volume.**~~
+  **RESOLVED, and it was this script's fault** (iteration 12). Line 301 selects
+  the edge, line 306 measures, line 309 calls — and the measurement forces a
+  rebuild that clears the selection, so the fillet ran against nothing. Re-run
+  with the measurement first, a single-edge fillet builds normally
+  (5.45933 → 5.45514). The guess offered here — "a hole's circular edge cannot
+  take the radius" — was wrong; all-edges fillets work *including* over hole
+  edges. See E022 and lesson 07.
 
 ## Confidence
 
 **HIGH** for Way 1 (measured exact, no prerequisites) and for shell being
 absent (five name variants, no dispid). **MEDIUM** for the two-ways comparison
 (Way 2's numbers come from iteration 7, not this run). **Unresolved**: linear
-patterns, single-edge fillet on a holed plate.
+patterns only — the fillet gap listed above was closed in iteration 14 and was
+an artifact of this script.

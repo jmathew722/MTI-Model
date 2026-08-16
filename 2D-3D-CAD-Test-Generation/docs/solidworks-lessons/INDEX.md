@@ -42,9 +42,22 @@ documentation. Lab notebook: `experiments/solidworks_practice/`.
   already uses. Shell is confirmed absent (no dispid, five name variants);
   linear patterns remain unexplained.
 
+* Iterations 10–15 ([lesson 07](07_the_selection_is_fragile.md)) chased a
+  contradiction — the same fillet call building in one script and returning
+  `None` in another — down to **a rebuild between "select" and "call" silently
+  clearing the selection and disconnecting held edge pointers** (E022). That bug
+  was in this lab's own harness, and it had manufactured two published findings:
+  **E020 is retracted** (all-edges fillets work, including over hole edges) and
+  iteration 9's single-edge fillet gap is closed. A third near-miss is recorded
+  as E023 — a sweep that stopped at its first success almost got working
+  pipeline code "fixed". The pipeline itself was audited and is unaffected.
+
 ## New entries added to the error ledger
-E012–E021 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md).
-**Every one of the six fails silently** — a feature object comes back, or `None`
+E012–E023 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md),
+one of them (E020) retracted and kept as a worked example of a false finding.
+**Every live failure mode is silent** — a feature object comes back, or `None`
 comes back with no exception, and the model reports clean. That is the single
 most important pattern this lab established: on this API, "it did not throw" is
-not evidence of anything.
+not evidence of anything. Its corollary, learned the hard way in lesson 07, is
+that `None` means "this did not work" and never says *why* — so a harness bug
+and a genuine API limit look identical until you run a controlled comparison.

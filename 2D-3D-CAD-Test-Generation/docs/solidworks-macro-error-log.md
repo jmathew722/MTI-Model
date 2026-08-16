@@ -220,17 +220,68 @@ does require the sketch closed and selected (E014). Boss and cut are not
 symmetric. Close the sketch in both cases so one rule covers both.
 
 
-### E020 — an all-edges fillet is a silent no-op, not a partial result
-**Symptom:** `FeatureFillet3` with 44 edges selected on a finished bracket
-returned without raising and changed the volume by exactly zero
-(5.83808 -> 5.83808 in^3).
-**Cause:** if any selected edge cannot accept the radius, the whole feature
-fails — SolidWorks does not fillet the edges that would have worked.
-**Fix:** fillet edge-by-edge (or in small verified groups) and record the skips,
-as reference doc 10 advises. Always compare the volume before and after: the
-return value does not distinguish "filleted everything" from "did nothing". The
-pipeline's deferred-retry queue already treats a failed fillet as deferrable
-rather than fatal, which is the right shape for this.
+### E020 — RETRACTED (iteration 14). Was: "an all-edges fillet is a silent no-op"
+**This entry was wrong, and the mistake was mine, not SolidWorks'.** It is kept
+rather than deleted because how it was produced is the lesson.
+
+**What it claimed:** `FeatureFillet3` with 44 edges selected on a finished
+bracket returned without raising and changed the volume by exactly zero
+(5.83808 -> 5.83808 in^3), so a single incompatible edge must void the whole
+feature.
+
+**What was actually happening:** the test measured the volume BETWEEN selecting
+the edges and calling the fillet (`t4_bracket_and_validation.py` selects at line
+155, measures at 159, calls at 162). The measurement forces a rebuild, the
+rebuild clears the selection, and `FeatureFillet3` was therefore called with
+NOTHING selected. See E022 for the real mechanism.
+
+**Re-tested with the measurement moved before the selection** (iteration 14,
+`t10_retract_e020.py`), on a 5.0 x 3.0 x 0.375 plate carrying four through
+holes, all 20 edges selected INCLUDING the circular hole edges:
+
+    R.0625 all-edges fillet -> BUILT, volume 5.45933 -> 5.42309 in^3
+
+An all-edges fillet works. A single-edge fillet on that same plate also works
+(5.45933 -> 5.45514), which had been recorded as a second unexplained gap in
+iteration 9 for the identical reason. **MANUAL rule 11 was rewritten**; the
+edge-by-edge advice is still reasonable for *reporting* which edges were skipped,
+but it is a preference, not a workaround for a defect that does not exist.
+
+### E022 — a rebuild between "select" and "call" voids the call, silently
+**Symptom:** an identical, correct feature call builds in one script and returns
+`None` in another. No exception either way.
+**Cause:** anything that rebuilds the model — `ForceRebuild3`, `EditRebuild3`,
+or any helper that calls one (in this lab, `swlab.Lab.measure` ends with
+`check_rebuild_errors`, which forces a rebuild) — **clears the current
+selection**. The feature call then runs against an empty selection and returns
+`None`. Measured directly: 12 edges selected -> rebuild -> `GetSelectedObjectCount2`
+returns 0. Enumerating bodies, reading `doc.Extension`, and
+`GetFeatureCount` do NOT clear it; only the rebuild does.
+**A rebuild also DISCONNECTS topology pointers you already hold.** Edge and face
+objects collected before the rebuild raise
+`com_error: The object invoked has disconnected from its clients` when you try
+to select them afterwards.
+**Fix:** treat *collect topology -> select -> call* as one atomic sequence with
+nothing in between. Do every measurement, sanity check and log line BEFORE you
+start selecting. This is the natural "select, verify, then build" pattern, and
+it is exactly the pattern that breaks — which is why it produced two false
+findings here (E020 and iteration 9's single-edge gap).
+**The pipeline is NOT affected** (audited iteration 13): every
+`check_rebuild_errors` call site in `pipeline/solidworks_builder.py` runs AFTER
+a feature completes, never between a selection and a call.
+
+### E023 — a sweep that stops at its first success proves nothing about the rest
+**Symptom:** iteration 15 swept `InsertFeatureChamfer(Options, ChamferType, ...)`,
+found `Options=0` built a chamfer, stopped there, and concluded that the
+pipeline's `Options=4` was a defect worth fixing.
+**Cause:** the sweep never tried `Options=4`. An A/B on one part, alternating
+`4, 0, 4, 0`, showed **both** values build on the first attempt and **both**
+return `None` on the later ones — the failures track attempt order (the edge
+already carries a chamfer), not the flag.
+**Fix:** no pipeline change; `build_chamfer`'s `InsertFeatureChamfer(4, 1, ...)`
+is correct. Before editing working code on the strength of an experiment, run
+the comparison the experiment skipped. Iteration 14's single-edge chamfer
+failure is explained the same way: that edge had just been filleted.
 
 ### E021 — IFeatureManager.InsertFeatureShell is not exposed under late binding
 **Symptom:** `AttributeError: <unknown>.InsertFeatureShell`; `hasattr` finds
