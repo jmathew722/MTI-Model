@@ -3441,6 +3441,18 @@ def generate_macro_package(
     if overview_report is not None:
         plan["overview_macro_validation"] = overview_report.to_dict()
         plan["engineering_review"].extend(overview_report.review_items())
+
+    # --- Operation-semantics check (2026-08-16) ---
+    # The echo check proves every emitted NUMBER matches the plan. This proves
+    # every emitted OPERATION does: a cut emitted as a boss, a through hole
+    # emitted blind, a depth on the wrong feature, or a planned step whose macro
+    # performs nothing keeps all the literals intact and still builds the wrong
+    # part. Strict, like the echo check — these are generator defects, not data
+    # ambiguity, so they must never leave the machine.
+    from pipeline.macro_semantics import assert_macro_semantics
+
+    assert_macro_semantics(pkg, plan, macros_dir)
+
     pkg.build_plan_json.write_text(json.dumps(plan, indent=2), encoding="utf-8")
 
     # --- Severity-ranked engineering review (first-class human-facing output) ---

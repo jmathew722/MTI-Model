@@ -1071,6 +1071,30 @@ vs the build; `check_hole_counts`, `check_correspondences`,
 for the Stage 1.5 WORDS vs the macro package. Advisory by default in both halves;
 strict is opt-in. Report artifacts are unchanged.
 
+### `pipeline/macro_semantics.py` — Stage 7.4, the macro's VERBS
+`macro_echo` proves every emitted geometry LITERAL round-trips to the plan.
+Between that and the plan's own CadQuery pre-validation sits a gap: every number
+can be right while the OPERATION around it is wrong — a cut emitted as a boss, a
+through hole emitted blind, a depth attached to the wrong feature, a planned step
+whose macro performs nothing, or a macro that both adds and removes material.
+Each keeps the literals intact, so the echo check passes, and each builds the
+wrong part. This module parses each feature macro's operation (kind / end
+condition / depth / plane / primitive counts, anchored to the exact emitted call
+signatures) and compares it to the plan step. Strict at generation time.
+
+**It is deliberately NOT a geometry builder.** The first attempt rebuilt the VBA
+into a solid and compared volumes with the plan's CadQuery build; that was
+abandoned because reproducing counterbores, slots, patterns and the workplane
+frame exactly enough to compare means re-implementing `cq_prevalidate` against
+macro text — a third parallel geometry implementation whose own modelling gaps
+show up as differences that look like generator bugs. Semantics need no geometry
+engine and have no approximation.
+
+Calibrated against the whole corpus: a tapped `thread` step legitimately drills
+its tap hole (so it is a planned cut, not an extra), a cosmetic thread emits no
+solid operation at all, and `slot_rect_cut` is a real planned cut. Each of those
+was a false positive in the first cut of the check.
+
 ### `schema.collapse_dimension_values` — the dimension-collision policy
 When two of a feature's dimensions canonicalize to the same key, **first-declared
 wins unless a label declares TOTALITY** (`overall_*`, `total_*`, `outside_*`, …),

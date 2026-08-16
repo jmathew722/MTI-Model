@@ -108,7 +108,7 @@ worked examples: EXTREME_README §6.**
 | 3 | `vector_extract/`, `hole_resolution.py` | exact hole positions from vector geometry |
 | 6 | `validator.py` | arithmetic/envelope verification (advisory unless `--strict-gate`) |
 | 6.5 | `build_sequencer.py` | the ONE deterministic build order + per-feature dispositions |
-| 7 | `macro_generator.py`, `macro_audit.py`, `macro_echo.py` | numbered VBA + generation-time invariants |
+| 7 | `macro_generator.py`, `macro_audit.py`, `macro_echo.py`, `macro_semantics.py` | numbered VBA + generation-time invariants (structure, literals, **operations**) |
 | 8 | `cq_prevalidate.py` | headless CadQuery build of the same plan; a failure aborts the COM build |
 | 9 | `solidworks_builder.py`, `deferred_retry.py` | COM `.sldprt` + STL; failed features quarantined and retried |
 | 10 | `constraint_verify.py` | measured STL vs must-meet constraints |
@@ -130,6 +130,7 @@ worked examples: EXTREME_README §6.**
 | `highres_pass.py` | shared window planning + reading reconciliation for both second-look systems, with pluggable trigger policy (§1.4) |
 | `overview_validate.py` | both Stage-11 overview checks, named sub-checks, one module (§1.3) |
 | `dwg_routing.py` | which of the two DWG products handles a file (§1.6) |
+| `macro_semantics.py` | the emitted macros perform the OPERATIONS the plan specifies — the verbs, where `macro_echo` checks the nouns |
 | `coordinate_normalize.py` | semantic anchor → global coordinate, and the ONE inch→meter conversion |
 | `position_solver.py` | the drawing's own dimensioning scheme, solved topologically |
 

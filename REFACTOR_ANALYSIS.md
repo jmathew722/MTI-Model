@@ -79,6 +79,54 @@ on it would buy an inconclusive answer.
 
 ---
 
+## ROUND 4 (2026-08-16) — macro-writing accuracy research
+
+A focused study of the one stage whose output is never executed by any test:
+build plan → VBA macros.
+
+**Method.** Inventoried the existing guards and asked what class of wrongness
+survives all of them; then tested four hypotheses against every macro of all 15
+rebuilt parts, plus a live SolidWorks build.
+
+**Hypotheses that turned out to be FALSE** (recorded so nobody re-runs them):
+
+| Hypothesis | Verdict |
+|---|---|
+| Undeclared variables under `Option Explicit` (a compile error) | false positive of the probe — `parts()` is declared in a multi-name `Dim` the probe mis-parsed |
+| `step` as a parameter name is a reserved-word compile error (327 sites) | no: these macros have been run against SolidWorks for months and the error ledger records runtime API failures, not compile failures. Churning 327 sites and every golden on a guess would have been the wrong call |
+| `RUN_ALL` misses emitted steps | zero findings — RUN_ALL is consistent |
+| Duplicate `Sub` names in a module | zero findings |
+
+**The real gap, and what closed it.** `macro_audit` checks structure,
+`macro_echo` checks every literal, `cq_prevalidate` checks the plan — but
+nothing checked that the emitted macros perform the OPERATIONS the plan
+specifies. A cut emitted as a boss, a through hole emitted blind, a depth on the
+wrong feature, a planned step whose macro does nothing, or a macro that both adds
+and removes material: every literal stays valid, the echo check passes, and the
+part is wrong. `pipeline/macro_semantics.py` now checks the verbs, strictly, at
+generation time, with six negative tests that each defeat the echo check.
+
+**A discarded approach, and why.** The first implementation replayed the emitted
+VBA into a CadQuery solid and compared it to the plan's solid. It reported 10 of
+15 parts as differing — and on inspection nearly all of those were the replay's
+OWN modelling gaps (counterbore depth, workplane frame, patterns). Closing them
+would have meant re-implementing `cq_prevalidate` against macro text: a third
+parallel geometry implementation, which is the exact disease §1.4/§1.5 of this
+document exist to cure. It was deleted in favour of the semantic check, which
+needs no geometry engine and has no approximation to be wrong about.
+
+**Calibration.** Three "findings" from the first version were the check itself
+being wrong, each fixed and pinned by a test: a tapped `thread` step legitimately
+drills its tap hole; a cosmetic thread emits no solid operation; `slot_rect_cut`
+is a real planned cut. Being wrong loudly in calibration is the point — a guard
+that cries wolf gets disabled.
+
+**Verification:** 1159 tests pass; all 15 parts rebuild clean with the guard
+enforced; a live SolidWorks build still produces a watertight part matching
+CadQuery.
+
+---
+
 **Known follow-ups created by this work** (recorded, not hidden):
 - The six source artifacts are still written by their stages; the ledger is a view
   over them. Retiring each file is the incremental next step, per §1.2's own plan.
