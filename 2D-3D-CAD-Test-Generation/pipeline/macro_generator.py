@@ -1851,13 +1851,34 @@ def _macro_pattern_covered(parent_id: str, qty: int, feature: Feature, step: str
 def _macro_pattern_skeleton(model: DrawingData, feature: Feature, step: str) -> str:
     dims = _dims_map(model, feature)
     spacing = dims.get("spacing") or next(iter(dims.values()), 0.0)
-    return f"""    ' TODO: VERIFY API CALL — linear pattern {feature.id}
+    length, _width = _envelope(model)
+    thickness = _model_thickness(model)
+    if length and thickness:
+        where = (f"the midpoint of the bottom edge, ({_v(length / 2.0)}, 0, "
+                 f"{_v(thickness)}) in drawing units")
+    else:
+        where = "a point on the edge that runs along the pattern direction"
+    return f"""    ' Linear pattern {feature.id} — LEFT FOR THE HUMAN, but the call is known-good.
     ' Pattern parameters from the drawing: qty={feature.quantity}, spacing={_v(spacing)} drawing units.
-    ' FeatureLinearPattern requires a pre-selected seed feature AND a direction
-    ' edge, which cannot be chosen reliably from extracted data. Either:
-    '  (a) the holes were already emitted as multiple circles in one cut (preferred), or
-    '  (b) select the seed feature + a direction edge, then use
-    '      Insert > Pattern/Mirror > Linear Pattern with the values above.
+    '
+    ' Prefer (a): if these holes were already emitted as multiple circles in ONE
+    ' cut, this pattern is redundant — that construction is measured to place every
+    ' hole exactly, in one feature, with no prerequisites. Skip this block.
+    '
+    ' Otherwise (b), the exact sequence, VERIFIED live on SolidWorks 2026
+    ' (experiments/solidworks_practice, iteration 19 — holes 1 -> 3):
+    '   swModel.ClearSelection2 True
+    '   ' direction edge at Mark 1 — a COORDINATE hit, NOT IEdge::Select4, which
+    '   ' returns True and is silently unusable. Try {where}.
+    '   swModel.Extension.SelectByID2 "", "EDGE", x, y, z, True, 1, Nothing, 0
+    '   ' seed feature at Mark 4, by its exact tree name
+    '   swModel.Extension.SelectByID2 "<seed>", "BODYFEATURE", 0, 0, 0, True, 4, Nothing, 0
+    '   Set swFeat = swModel.FeatureManager.FeatureLinearPattern4( _
+    '       {feature.quantity}, {_v(spacing)} * UNIT_FACTOR, 1, 0#, False, False, "NULL", "NULL", _
+    '       False, False, False, False, False, False, True, True, False, False, _
+    '       False, False)          ' TWENTY arguments — 18 raises "Parameter not optional"
+    ' Then COUNT the resulting instances: a wrong Mark returns Nothing and builds
+    ' nothing, without raising.
     MsgBox "Feature {feature.id} (pattern): apply manually if not already covered - see comments.", vbInformation
     LogResult "WARN", "{step}", "{feature.id} pattern left for manual application"
 """

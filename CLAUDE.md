@@ -163,6 +163,8 @@ worked examples: EXTREME_README §6.**
 | Is the OpenAI provider safe to use? | `docs/PROVIDER_STATUS.md` |
 | Why was HoleWizard5 removed? | `pipeline/experimental/README.md` (live evidence) |
 | How is a feature type actually constructed? | `pipeline/METHODS.md` |
+| **How do I write SolidWorks COM/macro code that works first time?** | `docs/solidworks-lessons/MANUAL.md` — **read before writing any COM or macro code.** 19 rules, every one produced by running code against live SolidWorks 2026 and measuring the result; nothing quoted from documentation. Lessons 01–09 carry the worked evidence; lab notebook in `experiments/solidworks_practice/`. |
+| A SolidWorks call returned `None` / built the wrong thing — is it known? | `docs/solidworks-macro-error-log.md` (E-numbers). **Every failure mode found on this install is silent** — a feature object comes back, or `None` with no exception, and the model reports clean. One entry (E020) is retracted and kept as a worked example of a false finding. |
 | What do the external reference docs say, and what did we adopt? | `docs/reference/TRIAGE.md`, `docs/reference/INTEGRATION_PLAN.md` |
 | Web UI layout, sheets, endpoints | `EXTREME_README.md` §10 |
 | Every output artifact per part | `EXTREME_README.md` §11 |
