@@ -1,0 +1,12 @@
+[
+  {
+    "step": "3.1 plate + bore + seed",
+    "ok": true,
+    "detail": "3 cylindrical face(s)"
+  },
+  {
+    "step": "3.2 axis from bore face (InsertAxis2)",
+    "ok": false,
+    "detail": "axis feature name = None"
+  }
+]

@@ -5,9 +5,11 @@ repo. **Status:** every rule below was produced by running code against a live
 SolidWorks 2026 (rev 34.3.2) via `win32com` and measuring the result. Nothing
 here is quoted from documentation.
 
-Read this before writing any COM or macro code. The five rules cost one lab
-session each to learn, and four of them fail **silently** — the call returns an
-object, the part looks built, and the geometry is wrong or missing.
+Read this before writing any COM or macro code. Each rule cost a failed lab run
+to learn, and **every failure mode found so far is silent** (E012–E017) — the
+call returns an object, or returns `None` without raising, the model reports
+clean, and the geometry is wrong or missing. Rule 6 is the one to internalise if
+you read nothing else.
 
 ---
 

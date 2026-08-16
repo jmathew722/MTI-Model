@@ -62,7 +62,18 @@ feat = doc.FeatureManager.FeatureRevolve2(
   (`solidworks_builder.build_circular_pattern_holes`) does build these; the
   difference is that it derives the axis from the bore's cylindrical face and
   then re-finds it via `_last_feature_of_type("RefAxis")` rather than assuming
-  the name `Axis1`. Reproducing that in the lab is the next iteration.
+  the name `Axis1`.
+
+  **Iteration 6 narrowed it further** (`t3_pattern_resolved.py`): on a round
+  plate with a concentric bore and one seed hole (3 cylindrical faces confirmed
+  present), reproducing production's exact approach — select the bore face,
+  `IModelDoc2.InsertAxis2(True)`, then re-find the axis by walking the tree for
+  a `RefAxis` feature — **the axis was never created** (`axis name = None`). So
+  the pattern is not the blocked step; **reference-axis creation is**. One
+  candidate cause not yet eliminated: on a round plate the OUTER face is also
+  cylindrical and concentric with the bore, so the face search may be selecting
+  the outer wall (R 3.0) rather than the bore (R 0.5). Match on RADIUS as well
+  as centre when picking a bore face. That is the next thing to try.
 * **Shell did not run**: `FeatureManager.InsertFeatureShell` raised
   `AttributeError: <unknown>.InsertFeatureShell` in the lab harness, though
   production calls exactly that signature. Suspected doc/selection state after

@@ -23,6 +23,8 @@ documentation. Lab notebook: `experiments/solidworks_practice/`.
   add → measure → **delete** so the same part hosts every experiment. Revolve
   measured exactly (270° = 0.75 × the 360° volume); patterns and shell did NOT
   build in the lab and the gaps are recorded rather than glossed.
+* Iteration 6 (`t3_pattern_resolved.py`) narrowed the pattern gap: the blocked
+  step is **reference-axis creation**, not the pattern call itself.
 
 ## New entries added to the error ledger
 E012–E017 in [`../solidworks-macro-error-log.md`](../solidworks-macro-error-log.md).
