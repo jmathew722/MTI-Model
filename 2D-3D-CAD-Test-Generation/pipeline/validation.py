@@ -158,8 +158,30 @@ def _layer_build_health(card: Scorecard, part_dir: Path) -> None:
     results = []
     for candidate in (part_dir / "logs" / "macro_result.json",
                       part_dir / "macro_result.json"):
-        if candidate.is_file():
-            for line in candidate.read_text(encoding="utf-8").splitlines():
+        if not candidate.is_file():
+            continue
+        text = candidate.read_text(encoding="utf-8")
+        # E027 (2026-08-17): this used to parse the file ONLY line-by-line as
+        # JSONL. The COM builder writes a pretty-printed JSON object —
+        # {"results": [ {...}, ... ]} — so every line failed to parse, `results`
+        # came out EMPTY, and a recorded "status": "FAIL" was never seen. TEST3
+        # part 4088-A-RevA reported build_health PASS while macro_result.json
+        # said its chamfer FAILED, in the same directory. Parse as JSON first;
+        # keep the JSONL path for the streaming writer that also exists.
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            # {"results": [...]} from the COM builder, or a single record when
+            # the streaming writer emitted exactly one line.
+            results = (list(parsed["results"]) if "results" in parsed
+                       else [parsed] if ("feature_id" in parsed or "feature" in parsed)
+                       else [])
+        elif isinstance(parsed, list):
+            results = list(parsed)
+        else:
+            for line in text.splitlines():
                 line = line.strip().rstrip(",")
                 if not line or line in ("[", "]"):
                     continue
@@ -167,7 +189,7 @@ def _layer_build_health(card: Scorecard, part_dir: Path) -> None:
                     results.append(json.loads(line))
                 except ValueError:
                     continue
-            break
+        break
     dispositions = _load(_first(part_dir, "*_build_dispositions.json")) or []
     excluded = [d.get("feature_id") for d in dispositions
                 if d.get("state") == "EXCLUDED_INCOMPLETE"]
@@ -175,15 +197,41 @@ def _layer_build_health(card: Scorecard, part_dir: Path) -> None:
               if str(r.get("status") or r.get("result") or "").lower()
               in ("fail", "failed", "error")]
 
-    if failed:
+    # E027 (2026-08-17): a feature can go MISSING without ever appearing in
+    # `failed`. `macro_result.json` records build-call failures; a feature that
+    # ends `deferred_open` (the retry ladder gave up) or `skipped` is absent from
+    # the model but absent from that list too. This layer used to compute
+    # `excluded` and then route it to an ADVISORY without touching the status —
+    # so TEST3 parts 4088-A and 4092-B reported PASS while missing a chamfer and
+    # a cut. Planned geometry that is not in the model is a build-health failure
+    # by definition; that is the whole question this layer exists to answer.
+    deferred = _load(_first(part_dir, "_deferred_log.json")) or {}
+    open_items = [str(i.get("feature_id") or "?")
+                  for i in (deferred.get("items") or [])
+                  if not i.get("recovered")]
+    missing = [fid for fid in (failed + excluded + open_items) if fid]
+    # de-duplicate, preserving order: one feature can be in several ledgers
+    seen: set[str] = set()
+    missing = [f for f in missing if not (f in seen or seen.add(f))]
+
+    if missing:
+        why = []
+        if failed:
+            why.append(f"{len(failed)} failed")
+        if open_items:
+            why.append(f"{len(open_items)} deferred open")
+        if excluded:
+            why.append(f"{len(excluded)} excluded as incomplete")
         card.add(Layer("build_health", FAIL,
-                       f"{len(failed)} feature(s) failed to build: {', '.join(failed[:6])}",
-                       {"failed": failed}))
+                       f"{len(missing)} planned feature(s) are NOT in the model "
+                       f"({', '.join(why)}): {', '.join(missing[:6])}",
+                       {"failed": failed, "deferred_open": open_items,
+                        "excluded": excluded}))
     elif not results and not dispositions:
         card.add(Layer("build_health", SKIPPED, "no build results on disk"))
     else:
         card.add(Layer("build_health", PASS,
-                       f"{len(dispositions)} planned feature(s), none reported a build failure"))
+                       f"{len(dispositions)} planned feature(s), all present in the model"))
     if excluded:
         card.advisories.append(
             f"{len(excluded)} feature(s) excluded as incomplete: {', '.join(excluded[:6])}")

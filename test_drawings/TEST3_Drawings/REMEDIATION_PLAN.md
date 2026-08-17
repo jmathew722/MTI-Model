@@ -14,26 +14,41 @@ what the user feels.
 
 ## Tier A — Reporting integrity (the UI currently shows PASS on broken parts)
 
-### A1. `build_health` reports PASS while features are missing — **root cause found**
+### A1. `build_health` reports PASS while features are missing — **DONE (2026-08-17)**
 
 **Evidence.** 4088-A-RevA and 4092-B both show
 `build_health: PASS — "N planned feature(s), none reported a build failure"`,
 while their own `model_check.txt` lists a chamfer that returned `None` and was
 skipped, and (4092-B) an `extrude_cut` that was deferred open.
 
-**Root cause** (`pipeline/validation.py:171-189`). The layer only counts entries
-in `macro_result.json` whose status is `fail`/`failed`/`error`. Features that end
-`deferred_open` or `skipped` never appear there. It *does* compute
-`excluded = [... state == "EXCLUDED_INCOMPLETE"]` — and then appends it to
-`card.advisories` **without affecting the layer status**. So the one signal that
-knows a feature is missing is deliberately routed away from the verdict.
+**Root cause — and my first diagnosis was only half of it.** I originally
+blamed `excluded` being routed to `card.advisories` without touching the layer
+status. That is real and is fixed. But the *main* cause was cruder: the layer
+parsed `macro_result.json` **only line-by-line as JSONL**, while the COM builder
+writes a pretty-printed `{"results": [...]}` object. Every line failed to parse,
+`results` came out **empty**, and a recorded `"status": "FAIL"` was invisible.
+4088-A-RevA reported `build_health: PASS` while `macro_result.json` in the same
+folder said `F003: FAIL`.
 
-**Fix.** Count `deferred_open`, `skipped_*` and `EXCLUDED_INCOMPLETE` toward the
-layer. A part missing planned geometry must not read PASS — FAIL if any planned
-solid feature is absent, WARN for cosmetic ones. Keep the advisory text.
+**Fixed.** Parse as JSON first (object, list, or single record), keeping the
+JSONL path; and count `deferred_open` and `EXCLUDED_INCOMPLETE` toward the layer
+alongside real failures. Advisory text kept.
 
-**Verification.** Replay the five TEST3 scorecards; 4088-A, 4092-B, 4080-D and
-4079-D must all stop saying PASS. Unit test with a disposition fixture.
+**Verified on the real parts** — re-scored all five:
+
+| part | before | after |
+|---|---|---|
+| 4086-A-RevA | PASS | **PASS** (correctly — nothing missing) |
+| 4088-A-RevA | PASS | **FAIL** — F003 |
+| 4092-B | PASS | **FAIL** — 2 features |
+| 4080-D-RevB | PASS | **FAIL** — 3 features |
+| 4079-D | PASS | **FAIL** — 4 features |
+
+`overall` follows: four parts now read FAIL where they read
+PASS_WITH_ASSUMPTIONS. Pinned by four new tests, including one built from the
+exact pretty-printed shape the COM builder emits. **One existing test asserted
+the bug** (`excluded_features_are_an_advisory_not_a_failure`) and was changed
+deliberately, with the reason recorded in its docstring.
 
 ### A2. `feature_audit` is SKIPPED on every part — **root cause found**
 
@@ -58,14 +73,15 @@ drawing says", which is what the user actually means by *perfectly modelled*.
 **Verification.** Re-run 4086-A; the audit must report on all 3 features and flag
 the over-applied chamfer (C1) without being told about it.
 
-### A3. `validation.json` has `verdict: None` on every part
+### A3. ~~`validation.json` has `verdict: None` on every part~~ — **WITHDRAWN, my error**
 
-**Evidence.** All five parts. Stage 11.5's headline — PASS /
-PASS_WITH_ASSUMPTIONS / FAIL — is absent, so the scorecard has layers but no
-overall answer for the UI to show.
+There was never a defect here. The key is **`overall`**, not `verdict`; my
+inspection script read the wrong field and I reported the `None` it returned as a
+finding. The verdicts were populated all along — 4086-A and 4088-A
+`PASS_WITH_ASSUMPTIONS`, 4092-B `FAIL`.
 
-**Fix.** Find why `build_scorecard` leaves the verdict unset on this path and
-populate it. Depends on A1 (the verdict is only meaningful once the layers are).
+Caught by checking the source before changing it, which is the E023 discipline
+working as intended. Left in the plan as a record rather than deleted.
 
 ---
 

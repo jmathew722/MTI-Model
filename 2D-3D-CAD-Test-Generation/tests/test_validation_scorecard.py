@@ -103,12 +103,57 @@ class TestLayers:
         assert _layer(card, "build_health").status == FAIL
         assert card.overall == FAIL
 
-    def test_excluded_features_are_an_advisory_not_a_failure(self, tmp_path):
+    def test_excluded_features_FAIL_the_layer_and_stay_an_advisory(self, tmp_path):
+        """CHANGED 2026-08-17 (E027). This test used to assert PASS.
+
+        That encoded the bug: a feature excluded as incomplete is NOT in the
+        model, and build_health exists to answer "did every planned feature
+        build". Asserting PASS meant TEST3 parts shipped a green build_health
+        while missing a chamfer and a cut. The advisory text is still expected —
+        it was never the problem; routing the signal ONLY to the advisory was.
+        """
         _write(tmp_path, "P_build_dispositions.json",
                [{"feature_id": "F003", "state": "EXCLUDED_INCOMPLETE"}])
         card = build_scorecard(tmp_path, "P")
-        assert _layer(card, "build_health").status == PASS
+        assert _layer(card, "build_health").status == FAIL
+        assert "F003" in _layer(card, "build_health").detail
         assert any("excluded as incomplete" in a for a in card.advisories)
+
+    def test_a_deferred_open_feature_fails_the_layer(self, tmp_path):
+        """The other way a feature goes missing without ever being 'failed'."""
+        _write(tmp_path, "_deferred_log.json",
+               {"total": 1, "recovered": 0, "open": 1,
+                "items": [{"feature_id": "F007", "feature_type": "extrude_cut",
+                           "recovered": False}]})
+        card = build_scorecard(tmp_path, "P")
+        assert _layer(card, "build_health").status == FAIL
+        assert "F007" in _layer(card, "build_health").detail
+
+    def test_a_recovered_deferred_feature_does_not_fail(self, tmp_path):
+        """The retry ladder getting it built is a success, not a failure."""
+        _write(tmp_path, "_deferred_log.json",
+               {"total": 1, "recovered": 1, "open": 0,
+                "items": [{"feature_id": "F007", "recovered": True}]})
+        _write(tmp_path, "P_build_dispositions.json",
+               [{"feature_id": "F007", "state": "BUILT"}])
+        card = build_scorecard(tmp_path, "P")
+        assert _layer(card, "build_health").status == PASS
+
+    def test_pretty_printed_macro_result_is_read(self, tmp_path):
+        """E027 root cause: the COM builder writes pretty-printed JSON with a
+        results array, and this layer parsed it ONLY as JSONL — so every line
+        failed to parse, results came out empty, and a recorded FAIL was
+        invisible. Real case: 4088-A-RevA reported PASS while macro_result.json
+        in the same folder said its chamfer FAILED."""
+        (tmp_path / "logs").mkdir()
+        _write(tmp_path / "logs", "macro_result.json", {"results": [
+            {"feature": "F001", "feature_id": "F001", "status": "PASS", "detail": ""},
+            {"feature": "F003", "feature_id": "F003", "status": "FAIL",
+             "detail": "InsertFeatureChamfer returned None"},
+        ]})
+        card = build_scorecard(tmp_path, "P")
+        assert _layer(card, "build_health").status == FAIL
+        assert "F003" in _layer(card, "build_health").detail
 
     def test_a_bbox_failure_is_carried_through(self, tmp_path):
         (tmp_path / "P_model_check.txt").write_text(
