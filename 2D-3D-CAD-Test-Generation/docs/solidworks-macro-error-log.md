@@ -389,3 +389,23 @@ distance, angle, edge count and scope) and the feature is deferred rather than
 silently dropped, so the failure is visible and the part still ships. Left open
 rather than closed with a story — see E023 for what a confident wrong explanation
 nearly cost.
+
+### E027 — the scorecard reports PASS on a part with missing geometry
+**Symptom:** `validation.json` says `build_health: PASS — "N planned feature(s),
+none reported a build failure"` while the same part's `model_check.txt` lists a
+chamfer that returned None and a cut that was deferred open. Observed on TEST3
+parts 4088-A-RevA and 4092-B, 2026-08-17.
+**Cause:** `validation._layer_build_health` counts only `macro_result.json`
+entries whose status is fail/failed/error. Features ending `deferred_open` or
+`skipped` never appear there. The layer DOES compute
+`excluded = [... state == "EXCLUDED_INCOMPLETE"]` and then appends it to
+`card.advisories` **without affecting the layer status** — the one signal that
+knows a feature is missing is routed away from the verdict.
+**Compounding cause:** `feature_audit` is SKIPPED on every part because
+`*_feature_verification.json` is never written — `main.py` does not call
+`feature_verify` at all, so Stage 10.6 is in the documented stage index but not
+in the run. The only geometric check that executes is the three-extent bounding
+box, which cannot see a missing hole.
+**Fix:** NOT YET MADE — planned as Tier A of
+`test_drawings/TEST3_Drawings/REMEDIATION_PLAN.md`. Until then, trust
+`<part>_model_check.txt` over `validation.json` for build completeness.
