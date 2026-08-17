@@ -410,21 +410,44 @@ box, which cannot see a missing hole.
 `test_drawings/TEST3_Drawings/REMEDIATION_PLAN.md`. Until then, trust
 `<part>_model_check.txt` over `validation.json` for build completeness.
 
-### E028 — the builder records PASS for a hole that is not in the model
+### E028 — a hole reports PASS and is not found in the STL (framing CORRECTED)
 **Symptom:** `macro_result.json` says `F002 PASS`; Stage 10.6 measures the STL
 and reports `F002 MISSING, measured: None`. Observed on TEST3 parts
 4086-A-RevA and 4088-A-RevA, 2026-08-17, immediately after Stage 10.6 was wired
 in for the first time.
-**Distinct from E027.** E027 was the scorecard failing to READ a recorded
-failure. Here the recorded value is itself wrong: the builder returned a feature
-object from `FeatureCut4`, logged PASS, and the geometry is absent. The source of
-truth is lying, which is worse than the reader being broken.
+**CORRECTION (2026-08-17, same day).** This entry first said "the builder is
+lying — it logged PASS for absent geometry". That framing is **not supported**,
+and checking the source before acting on it is what caught it:
+`solidworks_builder` ALREADY measures `_total_volume` either side of every
+material-removing feature and raises when a cut removed nothing —
+
+> reported success but removed no material (volume before=..., after=...) — the
+> cut profile likely does not overlap the body
+
+So the builder's PASS means material genuinely was removed. Something else
+explains the gap, and there are two live candidates, neither yet tested:
+
+  (i)  **the hole is cut in the wrong place.** These are faint scans with no
+       vector line work, so every position is a Hough estimate — the extraction
+       says so itself. But `extras: []` on both parts means Stage 10.6 found no
+       unexpected cylinder anywhere either, which argues against a simple
+       mispositioning.
+  (ii) **Stage 10.6 cannot see these holes.** 4086-A's is a BLIND counterbore
+       (`through: false`, 0.38 deep). If the STL detector only recognises
+       through-cylinders, a present blind hole reads MISSING. That would make
+       this a false positive in the brand-new verification stage — which is
+       exactly what a stage gets scrutinised for on its first day.
+
+Candidate (ii) must be ruled out before any builder change: "the verifier is
+wrong" and "the builder is wrong" produce identical symptoms here, and E020 is
+the standing reminder of what happens when a new measurement tool is trusted
+over the thing it measures.
 **Contributing factor found on 4088-A:** the planned hole diameter is `0.499`,
 which is that key's own HEIGHT (`1.75 x .499`); the drawing calls the hole out
 only as "DR & C'BORE FOR #10 SOC. HD. CAP SCR" with no explicit diameter. A hole
 as wide as the part is thick is a degenerate cut. Same class as the
 depth-semantics defect: a dimension used for a purpose its own label contradicts.
-**Partial fix (2026-08-17):** candidate (b) implemented as
+**Partial mitigation (2026-08-17):** candidate (b) implemented as
 `validator._check_feature_size_duplicates_envelope` — a hole/cut size that
 exactly repeats an envelope extent or the material thickness is flagged at plan
 time as borrowed rather than read.
@@ -436,6 +459,9 @@ repeated number. Widening the match to span it would flag a 0.499 bore in a
 strict rule is deliberate. `tests/test_feature_size_duplicates_envelope.py`
 pins the limit with a test named for it.
 
-**Candidate (a) — verify the cut removed material before logging PASS — is NOT
-done**, and is the one that would actually close E028. See Tier B1 of
-`test_drawings/TEST3_Drawings/REMEDIATION_PLAN.md`.
+**Candidate (a) — "verify the cut removed material before logging PASS" — turns
+out to ALREADY EXIST** (see the correction above), so it was never the fix. The
+real next step is to settle candidate (ii): build a plate with a known blind
+counterbore, export the STL, and check whether `feature_verify` classifies it OK
+or MISSING. One experiment, no ambiguity, and it decides which component is at
+fault. See Tier B1 of `test_drawings/TEST3_Drawings/REMEDIATION_PLAN.md`.

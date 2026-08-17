@@ -149,11 +149,14 @@ then report which condition failed. Overshoot already exists for open-edge cuts
         audit:        F002 MISSING  expected {x 0.88, y 0.25, dia 0.499, through True},  measured None
 ```
 
-This is **not** E027 — that was the scorecard failing to read a recorded FAIL.
-Here the builder genuinely recorded **PASS** for a feature that is absent from
-the geometry. `FeatureCut4` returned an object and the hole is not there. A
-second, independent reporting defect, and the more dangerous of the two because
-the source of truth itself is wrong. **Log as E028.**
+**CORRECTED the same day.** I first called this "the builder lying". It is not
+established: `solidworks_builder` already measures volume either side of every
+cut and raises when nothing was removed, so its PASS means material genuinely
+went away. Two candidates remain, neither tested — the hole is in the wrong
+place, or **Stage 10.6 cannot see a blind counterbore** (4086-A's is
+`through: false`, 0.38 deep) and is reporting a false MISSING on its first day
+in service. Ruling out the second is the required next step: a plate with a
+known blind counterbore, exported and re-verified. See E028.
 
 **(b) 4088-A's hole diameter is the part's own height.** The audit expects
 `diameter 0.499` — and `.499` is the KEY's **height** on that drawing
