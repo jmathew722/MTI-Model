@@ -424,8 +424,18 @@ which is that key's own HEIGHT (`1.75 x .499`); the drawing calls the hole out
 only as "DR & C'BORE FOR #10 SOC. HD. CAP SCR" with no explicit diameter. A hole
 as wide as the part is thick is a degenerate cut. Same class as the
 depth-semantics defect: a dimension used for a purpose its own label contradicts.
-**Fix:** NOT MADE. Two candidates, both untested: (a) verify the cut actually
-removed material before logging PASS — the volume is already measured either side
-of most build steps; (b) generalise the C2 guard so any feature dimension equal
-to an envelope value is flagged at plan time. See Tier B1 of
+**Partial fix (2026-08-17):** candidate (b) implemented as
+`validator._check_feature_size_duplicates_envelope` — a hole/cut size that
+exactly repeats an envelope extent or the material thickness is flagged at plan
+time as borrowed rather than read.
+
+**It does NOT catch 4088-A, and that is stated rather than glossed.** The hole
+came out `0.499` against a `0.500` envelope — a tolerance-band difference, not a
+repeated number. Widening the match to span it would flag a 0.499 bore in a
+0.500 plate, which is exactly what a legitimate tight fit looks like, so the
+strict rule is deliberate. `tests/test_feature_size_duplicates_envelope.py`
+pins the limit with a test named for it.
+
+**Candidate (a) — verify the cut removed material before logging PASS — is NOT
+done**, and is the one that would actually close E028. See Tier B1 of
 `test_drawings/TEST3_Drawings/REMEDIATION_PLAN.md`.

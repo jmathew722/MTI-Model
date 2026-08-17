@@ -445,6 +445,62 @@ def _check_extrude_depth_semantics(model: DrawingData, report: ValidationReport)
         )
 
 
+def _check_feature_size_duplicates_envelope(model: DrawingData,
+                                            report: ValidationReport) -> None:
+    """A hole/cut size equal to an envelope extent is a borrowed dimension.
+
+    Generalises `_check_extrude_depth_semantics` from the depth field to any
+    feature's defining SIZE, because the same mistake recurs there.
+
+    REAL CASE (TEST3 `4088-A-RevA`, 2026-08-17). The drawing is a KEY,
+    ``1.75 x .499``, and calls its hole out only as *"DR & C'BORE FOR #10 SOC.
+    HD. CAP SCR"* — no explicit diameter anywhere on the sheet. The plan came out
+    with ``hole diameter = 0.499``, which is the key's own HEIGHT. A hole as wide
+    as the part is thick is a degenerate cut; the builder logged PASS and Stage
+    10.6 measured the hole as MISSING (E028).
+
+    A borrowed number is not a measured one, and this is cheap to notice: the
+    value appears twice in the same part with two incompatible meanings. Advisory
+    — a 1.000 bore in a 1.000 plate is legal if unusual, so this warns and the
+    build proceeds.
+    """
+    from pipeline.macro_generator import _envelope, _model_thickness
+
+    length, width = _envelope(model)
+    thickness = _model_thickness(model)
+    envelope = {"overall length": length, "overall width": width,
+                "material thickness": thickness}
+    envelope = {k: v for k, v in envelope.items() if v and v > 0}
+    if not envelope:
+        return
+
+    SIZE_TOKENS = ("diameter", "dia", "bore", "radius", "hole_size", "slot_width",
+                   "cbore_diameter", "counterbore_diameter")
+    by_id = {d.id: d for d in model.dimensions}
+    for f in model.features:
+        if f.type not in (FeatureType.HOLE, FeatureType.EXTRUDE_CUT):
+            continue
+        for did in (f.related_dimensions or []):
+            dim = by_id.get(did)
+            if dim is None:
+                continue
+            token = (dim.canonical_applies_to or dim.applies_to or "").strip().lower()
+            if not any(t in token for t in SIZE_TOKENS):
+                continue
+            for label, value in envelope.items():
+                # exact-ish: a borrowed dimension is the SAME number, not a near miss
+                if abs(dim.value - value) <= max(1e-6, abs(value) * 1e-4):
+                    report.warn(
+                        f"{f.id}: its {token} comes from {dim.id} ({dim.value:g}), which "
+                        f"is exactly the part's {label} ({value:g}) — the same number "
+                        f"used for two incompatible things, so it was probably borrowed "
+                        f"rather than read. A cut this size relative to the part is "
+                        f"degenerate and may remove nothing. VERIFY the callout; if the "
+                        f"drawing gives no size for this feature, it needs a human."
+                    )
+                    break
+
+
 def _edge_treatment_thickness(model: DrawingData) -> float:
     """Base-solid thickness in drawing units, or 0.0 when it is not known.
 
@@ -574,6 +630,7 @@ def run_verification(
     _check_unmodeled_fillets(model, report)
     _check_edge_treatment_radius(model, report)
     _check_extrude_depth_semantics(model, report)
+    _check_feature_size_duplicates_envelope(model, report)
     _check_mirror_features(model, report)
     _check_view_consistency(model, report)
 
