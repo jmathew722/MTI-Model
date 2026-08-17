@@ -82,7 +82,7 @@ bounding box said:
 
 | part | feature audit |
 |---|---|
-| 4086-A-RevA | **F002 = MISSING** — the counterbored hole |
+| 4086-A-RevA | ~~F002 = MISSING~~ — **false positive**, blind hole; see E028 |
 | 4088-A-RevA | **F002 = MISSING** |
 | 4092-B | F001 = WRONG_SIZE, F004 = MISSING |
 | 4080-D-RevB | F002 = WRONG_SIZE, F009 = MISSING |

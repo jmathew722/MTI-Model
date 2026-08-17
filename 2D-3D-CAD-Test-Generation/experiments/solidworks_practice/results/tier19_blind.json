@@ -1,0 +1,13 @@
+{
+  "volumes": [
+    12.0,
+    11.80365,
+    11.72904
+  ],
+  "audit": {
+    "F001": "OK",
+    "F_THRU": "WRONG_SIZE",
+    "F_BLIND": "MISSING"
+  },
+  "verdict": "inconclusive - the THROUGH hole itself was not detected ({'F001': 'OK', 'F_THRU': 'WRONG_SIZE', 'F_BLIND': 'MISSING'})"
+}

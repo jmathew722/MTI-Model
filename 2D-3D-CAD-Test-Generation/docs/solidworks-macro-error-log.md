@@ -438,10 +438,36 @@ explains the gap, and there are two live candidates, neither yet tested:
        this a false positive in the brand-new verification stage — which is
        exactly what a stage gets scrutinised for on its first day.
 
-Candidate (ii) must be ruled out before any builder change: "the verifier is
-wrong" and "the builder is wrong" produce identical symptoms here, and E020 is
-the standing reminder of what happens when a new measurement tool is trusted
-over the thing it measures.
+**RESOLVED — candidate (ii) is CONFIRMED** (iteration 24,
+`t19_blind_hole_detection.py`). One plate, 4 x 3 x 1.0, carrying a THROUGH hole
+at (1.0, 1.5) and a BLIND 0.38-deep hole at (3.0, 1.5), both ⌀0.5, both
+measurably cut:
+
+    through cut  built   volume 12.0      -> 11.80365
+    blind   cut  built   volume 11.80365  -> 11.72904
+    Stage 10.6:  F_THRU = WRONG_SIZE      F_BLIND = MISSING      extras: 0
+
+**The blind hole is provably in the model and `feature_verify` calls it
+MISSING.** Stage 10.6 has a FALSE POSITIVE on blind holes — it detects through
+cylinders and does not see blind ones at all (`extras: 0`, so it is not finding
+it elsewhere either).
+
+**Consequences, including for my own earlier claims:**
+
+* **4086-A-RevA's `F002 MISSING` is not evidence of a bad model.** Its hole is a
+  blind counterbore (`through: false`, 0.38 deep) — exactly the case that
+  misreports. The part may well be correct. The statement "every TEST3 part is
+  worse than the envelope said" was **overstated** and is withdrawn for 4086-A.
+* **4088-A-RevA's is NOT explained by this** — that hole is `through: true`, so
+  its MISSING survives and is still a real finding.
+* A second, smaller defect surfaced in the same run: the through hole, cut at
+  exactly ⌀0.5, was classified **WRONG_SIZE**. The STL diameter measurement has
+  a systematic error worth its own investigation.
+
+**Fix:** NOT MADE. `feature_verify` needs blind-hole detection (a cylindrical
+recess that does not pierce the far face) before any of its MISSING verdicts on
+blind features can be trusted, and its diameter measurement needs checking. Until
+then, treat `MISSING` on a `through: false` feature as UNKNOWN, not as absent.
 **Contributing factor found on 4088-A:** the planned hole diameter is `0.499`,
 which is that key's own HEIGHT (`1.75 x .499`); the drawing calls the hole out
 only as "DR & C'BORE FOR #10 SOC. HD. CAP SCR" with no explicit diameter. A hole
