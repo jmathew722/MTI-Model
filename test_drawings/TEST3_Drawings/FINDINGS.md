@@ -150,3 +150,42 @@ Nothing here duplicates the SolidWorks API lessons. Those are canonical in
 (MANUAL + 9 lessons) and
 [`docs/solidworks-macro-error-log.md`](../../2D-3D-CAD-Test-Generation/docs/solidworks-macro-error-log.md)
 (E012–E026). This file records only what the **real drawings** added.
+
+
+---
+
+## Re-baseline after fixing the verifier (2026-08-17, end of session)
+
+`feature_verify` could not see blind holes (E028) and was reporting false
+MISSING verdicts. After the fix, all five parts were re-measured against their
+existing STLs — no rebuild, same geometry, trustworthy instrument:
+
+| Part | Features verified | Still wrong |
+|---|---|---|
+| **4086-A-RevA** | **2 / 2** | — **all features verified** |
+| 4088-A-RevA | 1 / 2 | F002 MISSING (a **through** hole — real) |
+| 4092-B | 2 / 4 | F001 WRONG_SIZE, F004 MISSING |
+| 4080-D-RevB | 1 / 3 | F002 WRONG_SIZE, F009 MISSING |
+| 4079-D | 0 / 3 | F001 WRONG_SIZE, F007 MISSING |
+
+**4086-A-RevA (the KEY, A040861E) passes its feature audit completely** — base
+and counterbored hole both verified at the right place and size, envelope
+matching on every extent. It is the one part in this batch that the pipeline
+models correctly. **Caveat that the audit does not cover:** its chamfer is still
+applied to 14 edges where the drawing says `TYP (4)` (Tier C1), and the audit
+grades only the 2 solid features, not edge treatments.
+
+**The surviving pattern is coherent**, which makes B1 tractable:
+
+* **MISSING is now only ever a through hole** — 4088-A F002, 4092-B F004,
+  4080-D F009. One failure mode, three instances, no longer confounded by blind
+  holes.
+* **WRONG_SIZE clusters on base features** — and 4079-D's F001 is *expected*:
+  that is the plate extruded 15.25 in thick by the depth-semantics defect. The
+  audit independently rediscovered a defect already diagnosed from the
+  extraction, which is a good sign for the instrument.
+
+**Next step for B1:** the three through-hole MISSINGs are one investigation, not
+three. All three parts are faint scans whose hole positions are Hough estimates,
+so the leading hypothesis is position, not the cut — testable by comparing each
+planned position against the measured part outline without touching SolidWorks.
