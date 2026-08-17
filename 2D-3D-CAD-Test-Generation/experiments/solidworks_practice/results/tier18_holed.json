@@ -1,0 +1,22 @@
+[
+  {
+    "step": "23.A no holes, chamfer .06 (control)",
+    "ok": true,
+    "detail": "12 edges; 0.06in; vol 6.0 -> 5.94715; returned=feature"
+  },
+  {
+    "step": "23.B ONE hole, chamfer .06",
+    "ok": true,
+    "detail": "14 edges; 0.06in; vol 5.94478 -> 5.88724; returned=feature"
+  },
+  {
+    "step": "23.C FOUR holes, chamfer .06",
+    "ok": true,
+    "detail": "20 edges; 0.06in; vol 5.77911 -> 5.70748; returned=feature"
+  },
+  {
+    "step": "verdict",
+    "ok": null,
+    "detail": "holes are NOT the cause - a holed plate chamfers fine, so the TEST3 failures come from something else in those parts"
+  }
+]

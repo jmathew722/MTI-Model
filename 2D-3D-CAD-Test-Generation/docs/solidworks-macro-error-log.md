@@ -360,3 +360,32 @@ agree, as do the five E012-family end conditions. `tests/test_enum_fallbacks.py`
 re-reads them from source and fails on drift without needing SolidWorks; adding a
 new fallback requires running `t13_enum_fallback_audit.py` first. The emitted VBA
 is immune by construction — it uses named constants, never numeric literals.
+
+### E026 — OPEN: chamfers fail on real parts for a reason not yet found
+**Symptom:** `InsertFeatureChamfer` returns `None`, raises nothing, no geometry
+changes — on real drawings, repeatedly. TEST3 batch, three failures in the first
+four parts, every one with scope 'all edges':
+
+    4079-D  F005  1.76 in   49 edges -> None
+    4079-D  F006  0.12 in   49 edges -> None
+    4088-A  F003  0.06 in   26 edges -> None    (on a 0.500 thick key)
+
+The last one rules out size: 0.06 on a 0.500 plate is far inside the E024 limit.
+
+**Two hypotheses tested live and BOTH DISPROVED** (iterations 22-23):
+  * the all-edges scope — an all-edges chamfer builds fine on a clean
+    4 x 3 x 0.5 plate (6.0 -> 5.94715), while the all-edges fillet control also
+    builds. Scope is not it.
+  * circular hole edges — 0, 1 and 4 holes all chamfer successfully
+    (12, 14 and 20 edges). Hole edges are not it.
+
+**Cause unknown.** The most likely remaining factor is the accumulated feature
+state where the chamfer runs: 4079-D's chamfer fires on geometry already
+corrupted by the depth-semantics defect, and its 49 edges include faces from five
+prior features. That is a hypothesis, not a finding.
+
+**No fix made.** The builder already fails loudly here (`SolidWorksError` naming
+distance, angle, edge count and scope) and the feature is deferred rather than
+silently dropped, so the failure is visible and the part still ships. Left open
+rather than closed with a story — see E023 for what a confident wrong explanation
+nearly cost.

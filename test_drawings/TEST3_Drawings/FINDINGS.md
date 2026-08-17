@@ -17,7 +17,7 @@ found things no synthetic part could.
 Parts are named from the **title block**, not the filename: `A040791E.PDF` →
 `4079-D`. Worth knowing when looking for output.
 
-## Three defects found, all fixed, all pinned by tests
+## Three defects found: two fixed and pinned by tests, one open
 
 ### 1. A dimension labelled "length" was driving an extrude depth
 
@@ -69,7 +69,7 @@ Dropping every sheet is the one outcome the guiding principle forbids. **Fixed**
 guess is stated in the warnings, including how to remove it (name a sheet
 `<part>_front_view`).
 
-### 3. Chamfers fail as a group where fillets do not — *under investigation*
+### 3. Chamfers fail on real parts — OPEN, cause not found (E026)
 
 Three chamfer failures in the first four parts, **every one with scope
 "all edges"**:
@@ -85,11 +85,25 @@ near the E024 limit (`R < t/2 = 0.25`), so "too big" does not explain it.
 
 E020 once claimed exactly this about *fillets* and was **retracted** — the
 all-edges fillet works, and the apparent failure was the lab's own harness
-clearing the selection. So the honest question is whether chamfers genuinely
-differ, or whether this is E020 repeating. `t17_all_edges_chamfer.py` is written
-to settle it: all-edges fillet (control) vs all-edges chamfer vs edge-by-edge
-chamfer, on one clean plate. **Not yet run** — SolidWorks was occupied by the
-batch. No claim either way until it is.
+clearing the selection. So the honest question was whether chamfers genuinely
+differ.
+
+**Two hypotheses tested against live SolidWorks. Both disproved.**
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| the "all edges" scope breaks chamfers | `t17`: all-edges fillet vs all-edges chamfer on a clean 4×3×0.5 plate | **chamfer BUILDS**, 6.0 → 5.94715 |
+| circular hole edges break chamfers | `t18`: 0, 1 and 4 holes, all-edges chamfer 0.06 | **all three BUILD** — 12, 14 and 20 edges |
+
+So an all-edges chamfer is fine on a clean plate *and* on a holed plate. The
+TEST3 failures come from something specific to those parts — most likely the
+accumulated feature state at the point the chamfer runs (4079-D's chamfer fired
+on geometry already corrupted by defect 1, and its 49 edges include faces from
+five prior features).
+
+**The cause is not identified, and no fix has been made.** Recording a disproved
+hypothesis is worth more than a plausible story: iteration 15 already showed how
+close a confident wrong explanation came to "fixing" working code.
 
 ## What the drawings themselves demand
 
@@ -118,8 +132,13 @@ batch. No claim either way until it is.
 | SB10009 | **no output** | defect 2 |
 | A040871E | no output | tool-input validation failure, repair attempted |
 
-The batch was still running when this was written; the remaining parts
-(SB10011, SB10024, SB10025, SB10046, SB10047, SB11842, SB12273) are pending.
+**The batch did not finish.** It stalled on SB10011 — 16 minutes of silence
+after that part's extraction completed, in the resolution phase, with SolidWorks
+itself still responding (so not a modal dialog). It was stopped deliberately to
+free SolidWorks for the chamfer experiments above, which affect every part rather
+than three more. SB10024, SB10025, SB10046, SB10047, SB11842 and SB12273 were
+never reached. **The stall itself is unexplained and worth a look** — a pipeline
+that hangs silently mid-batch is its own defect.
 
 **4086-A-RevA is the current best result** — a KEY, built clean with every
 feature applied and every extent matching.
@@ -130,4 +149,4 @@ Nothing here duplicates the SolidWorks API lessons. Those are canonical in
 [`docs/solidworks-lessons/`](../../2D-3D-CAD-Test-Generation/docs/solidworks-lessons/)
 (MANUAL + 9 lessons) and
 [`docs/solidworks-macro-error-log.md`](../../2D-3D-CAD-Test-Generation/docs/solidworks-macro-error-log.md)
-(E012–E025). This file records only what the **real drawings** added.
+(E012–E026). This file records only what the **real drawings** added.

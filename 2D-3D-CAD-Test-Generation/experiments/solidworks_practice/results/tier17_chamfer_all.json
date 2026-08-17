@@ -1,0 +1,22 @@
+[
+  {
+    "step": "22.A all-edges FILLET R0.06 (control)",
+    "ok": true,
+    "detail": "12 edges; vol 6.0 -> 5.97711; returned=feature"
+  },
+  {
+    "step": "22.B all-edges CHAMFER 0.06 (the pipeline)",
+    "ok": true,
+    "detail": "12 edges; vol 6.0 -> 5.94715; returned=feature"
+  },
+  {
+    "step": "22.C EDGE-BY-EDGE chamfer 0.06 (candidate fix)",
+    "ok": true,
+    "detail": "23 edge(s) took it, 49 skipped; vol 6.0 -> 5.93808"
+  },
+  {
+    "step": "verdict",
+    "ok": false,
+    "detail": "all-edges CHAMFER works here - the TEST3 failures are NOT explained by the all-edges scope and need another cause"
+  }
+]
