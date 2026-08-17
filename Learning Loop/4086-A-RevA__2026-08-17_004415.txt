@@ -1,0 +1,63 @@
+LEARNING LOOP — 4086-A-RevA
+============================================================
+Run:     2026-08-17 00:44:15
+Status:  READY
+Model:   claude-sonnet-5
+Outputs: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4086-A-RevA
+Fingerprint: 39c6d01ca2a77b4b
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — READY
+   - No gate failures (run reached READY).
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [MEDIUM] The top view shows only ONE hole (circled, with counterbore callout), but the front/profile view's dashed hidden-line pair could be interpreted as showing hole depth ambiguously — it is not fully clear from the profile view alone whether the hole is a blind counterbore over a through-drill, or a blind hole entirely, since no explicit depth dimension for the through-drill portion is given beyond '.38 DP' for the counterbore.
+       -> Verify against the note '.38 DP FOR .312 SOC. HD. CAP SCR.' — this typically implies the counterbore depth only, with the pilot/clearance drill continuing through the full 1.000 thickness. Confirm with the source inspection report or by checking if a full-depth hidden line is drawn through the entire thickness in the profile view (if cropped view can be re-examined at higher resolution).
+   - [LOW] The two dimensions '2.75' (from left edge to hole) and '5.50' (overall length) are drawn with an overrun/undercut style tick marks, and it is unclear whether 2.75 is measured to the hole center or represents half of 5.50 (implying the hole is exactly centered). If the hole is off-center, this needs confirmation.
+       -> Check witness/extension lines in the top view to confirm the 2.75 dimension terminates exactly at the hole centerline and whether 2 x 2.75 = 5.50 confirms a centered hole.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 2, HIGH 2, MEDIUM 2, LOW 1
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout ".06 X 45° TYP (4)" states 4 instance(s), but the per-view extraction captured hole group(s) of [1] (total 1). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout "UNLESS OTHERWISE SPECIFIED: THIRD ANGLE PROJECTION, DIMENSIONS IN INCHES, 2 PLACE DIM ±.02, 3 PLACE DIM ±.010, ANGULAR DIM ±1°, SCALE 1=2" states 2 instance(s), but the per-view extraction captured hole group(s) of [1] (total 1). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [HIGH] OV-001 (overview_analysis): INSPECTION-BALLOON REFERENCE (top_view, front_view): The top view shows only ONE hole (circled, with counterbore callout), but the front/profile view's dashed hidden-line pair could be interpreted as showing hole depth ambiguously — it is not fully clear from the profile view alone whether the hole is a blind counterbore over a through-drill, or a blind hole entirely, since no explicit depth dimension for the through-drill portion is given beyond '.38 DP' for the counterbore. Recognized as an inspection dimension balloon (circled numeral / 'IN.' value), attached to part metadata — NOT a competing geometry dimension, so it is excluded from dimension-conflict reconciliation.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [HIGH] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (top_view): The two dimensions '2.75' (from left edge to hole) and '5.50' (overall length) are drawn with an overrun/undercut style tick marks, and it is unclear whether 2.75 is measured to the hole center or represents half of 5.50 (implying the hole is exactly centered). If the hole is off-center, this needs confirmation. Recommendation: Check witness/extension lines in the top view to confirm the 2.75 dimension terminates exactly at the hole centerline and whether 2 x 2.75 = 5.50 confirms a centered hole.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM]  (build): Build caveat: F003: chamfer applied to 14 edges (all edges); verify against the drawing (selective chamfers need the interactive macro).
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM] OV004 (overview): The overview POSSIBLY shows 1x slot (Small notch/slot feature shown with dashed lines near center of side/front view, center of front view, small dashed rectangular feature) with no matching feature in the build.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: slot feature(s) — verify against the drawing
+   - [LOW] OV005 (overview): The overview shows content the checker cannot auto-match: Rounded rectangular feature shown as separate small detail view (possibly a key or plug shape) at bottom right of drawing area (bottom right of left drawing area)
+       decision: not automatically verified against the build
+       why: no direct counterpart in the build inventory or the non-feature taxonomy
+       affects: manual visual comparison recommended
+
+5. BUILD / MACRO FEATURE FAILURES
+   - none
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '4086-A-RevA' finished READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * macro: solidworks_builder.py (COM feature build) + macro_generator.py (VBA for that feature type)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4086-A-RevA

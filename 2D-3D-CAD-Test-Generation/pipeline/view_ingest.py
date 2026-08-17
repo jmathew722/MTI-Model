@@ -112,6 +112,29 @@ def _collect_part(name: str, image_paths: list[Path]) -> PartViews:
             )
             continue
         part.views[view] = path
+    if not part.views and image_paths:
+        # NOTHING classified, but the folder is not empty. Dropping every sheet
+        # guarantees the worst outcome: extraction dies with "No view images
+        # supplied" and the part produces no model, no macros and no report at
+        # all. A complete approximate model is always the correct outcome; an
+        # incomplete one is always wrong — so adopt the sheets as overviews and
+        # let the pipeline read them, flagged.
+        #
+        # REAL CASE (TEST3, 2026-08-17): part SB10009 holds "SB10009 SHT 3.pdf"
+        # and "SB10009 SHT 4.pdf". Neither stem matches a view keyword, neither
+        # starts with a digit, and neither equals the folder name, so both were
+        # skipped and the part was lost. Single-sheet parts survived only
+        # because their stem happened to equal the folder name.
+        adopted = sorted(image_paths)
+        part.views[OVERVIEW_VIEW] = adopted[0]
+        for extra_index, extra in enumerate(adopted[1:], start=2):
+            part.views[f"{OVERVIEW_VIEW}_sheet{extra_index}"] = extra
+        part.warnings.append(
+            f"No sheet could be classified as a view by filename; adopted "
+            f"{len(adopted)} sheet(s) as overview context so the part still builds "
+            f"({', '.join(p.name for p in adopted)}). VERIFY which sheet is the "
+            f"front view — naming a sheet '<part>_front_view' removes the guess."
+        )
     if "front" not in part.views:
         part.warnings.append("No FRONT view found — the base profile cannot be built without it.")
     return part

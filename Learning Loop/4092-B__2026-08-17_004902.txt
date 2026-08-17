@@ -1,0 +1,109 @@
+LEARNING LOOP — 4092-B
+============================================================
+Run:     2026-08-17 00:49:02
+Status:  NOT READY
+Model:   claude-sonnet-5
+Outputs: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4092-B
+Fingerprint: a3e732d9d8ab38aa
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — NOT READY
+   - overview verification found CRITICAL gap(s)
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [HIGH] The small rectangular tab/lug shown broken out above the front view (with 1.062 CENT. dimension) does not appear anywhere in the side sectional view, so its height, depth, and connection to the main cylindrical body cannot be confirmed.
+       -> Check for an additional detail view or callout defining the tab geometry; verify with the designer/drafter whether this tab is a separate feature requiring its own section or is simply a broken-out reference to a keyway/slot not otherwise dimensioned.
+   - [MEDIUM] The side section view shows an overall dimension of 3.000 (width) and .75 (wall/step) but no overall height/length dimension is given for the tall cylindrical body, leaving the total axial length of the spacer undimensioned in the visible views.
+       -> Look for a missing or cropped-off length dimension, possibly on a portion of the sheet not shown, or confirm the length is implied to be per WK²=3.22 mass property note.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 6, MEDIUM 11, LOW 1
+   - [CRITICAL] D901 (dimension): F003 length=0.75 inch DERIVED from the outer profile (envelope height 0.75 − partial 0); no feature-local length callout. Verify.
+       decision: resolved value 0.75
+       why: profile delta
+       affects: dimension D901
+   - [CRITICAL] F003 (feature): POSITION COMMITTED for F003 at a conservative inside-parent placement (0.75, 0.1875): no location dimension and no symmetry evidence. Tried: extension-line tracing from 1 unassociated linear dim(s) (no leader reached F003's centerline); symmetry inference (no centerline/symmetry relationship names this feature). Built and flagged (never left at a [0,0] placeholder) — verify/correct the location in SolidWorks.
+       decision: committed_conservative
+       why: position not dimensioned on the drawing
+       affects: feature F003
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout ".09 X 45° TYP" states 9 instance(s), but the per-view extraction captured hole group(s) of [1, 1] (total 2). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] F006 (build): The .sldprt build SKIPPED feature F006 (chamfer): InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.002286 m, angle=0.7854 rad, 28 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.002286 m, angle=0.7854 rad, 28 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       affects: feature F006
+   - [CRITICAL] F003 (build): The .sldprt build SKIPPED feature F003 (extrude_cut): deferred_open (zero_thickness_or_geometry): FeatureCut4 returned None for F003 in BOTH directions despite verified preconditions (sketch closed & fully defined, pro
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: deferred_open (zero_thickness_or_geometry): FeatureCut4 returned None for F003 in BOTH directions despite verified preconditions (sketch closed & fully defined, pro
+       affects: feature F003
+   - [CRITICAL] OV003 (overview): The overview clearly shows 1x slot (Narrow rectangular slot/keyway at top, width 1.062, shown in top view with break lines, top of part, centered) but the build contains no matching feature.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: slot feature(s) — verify against the drawing
+   - [MEDIUM] D900 (dimension): D900=0.09 inferred for chamfer F006 from the TYP callout D006 (0.09 inch) — same value repeats on geometrically similar features; verify.
+       decision: resolved value 0.09
+       why: typ propagation
+       affects: dimension D900 (chain D006)
+   - [MEDIUM] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (front, side_section): The small rectangular tab/lug shown broken out above the front view (with 1.062 CENT. dimension) does not appear anywhere in the side sectional view, so its height, depth, and connection to the main cylindrical body cannot be confirmed. Recommendation: Check for an additional detail view or callout defining the tab geometry; verify with the designer/drafter whether this tab is a separate feature requiring its own section or is simply a broken-out reference to a keyway/slot not otherwise dimensioned.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (side_section): The side section view shows an overall dimension of 3.000 (width) and .75 (wall/step) but no overall height/length dimension is given for the tall cylindrical body, leaving the total axial length of the spacer undimensioned in the visible views. Recommendation: Look for a missing or cropped-off length dimension, possibly on a portion of the sheet not shown, or confirm the length is implied to be per WK²=3.22 mass property note. [request-full-sheet: this looks like a cropped/off-sheet region — upload the complete sheet rather than re-running.]
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM]  (build): Build caveat: F005: chamfer applied to 8 edges (all edges); verify against the drawing (selective chamfers need the interactive macro).
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM]  (build): Build caveat: F006 (chamfer) skipped: InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.002286 m, angle=0.7854 rad, 28 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM]  (build): Build caveat: F003 (extrude_cut) deferred_open after retries: FeatureCut4 returned None for F003 in BOTH directions despite verified preconditions (sketch closed & fully defined, pro
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM] OV002 (overview): The overview shows content the checker cannot auto-match: Outer diameter of cylindrical spacer, 10.50 DIA (outer edge of part)
+       decision: not automatically verified against the build
+       why: no direct counterpart in the build inventory or the non-feature taxonomy
+       affects: manual visual comparison recommended
+   - [MEDIUM] OV005 (overview): The overview POSSIBLY shows 6x fillet (6 radii (6R) at assembly, .060 stock allowance called out for machining fillets, unspecified edges, per note) with no matching feature in the build.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: fillet feature(s) — verify against the drawing
+   - [MEDIUM] OV007 (overview): The overview shows content the checker cannot auto-match: Perpendicularity/parallelism callout (||A|.001) relative to datum A (top right of step feature)
+       decision: not automatically verified against the build
+       why: no direct counterpart in the build inventory or the non-feature taxonomy
+       affects: manual visual comparison recommended
+   - [MEDIUM] OV008 (overview): The overview shows content the checker cannot auto-match: Step/counterbore-like shoulder feature, 3.000 wide x .75 deep, at top of part (top of cross-section view)
+       decision: not automatically verified against the build
+       why: no direct counterpart in the build inventory or the non-feature taxonomy
+       affects: manual visual comparison recommended
+   - [MEDIUM] OV009 (overview): The overview shows content the checker cannot auto-match: Hatched/shaded step transition area indicating material section change (top of cross-section, near shoulder)
+       decision: not automatically verified against the build
+       why: no direct counterpart in the build inventory or the non-feature taxonomy
+       affects: manual visual comparison recommended
+   - [LOW] OV006 (overview): Reference/phantom geometry noted: Datum feature -A- flatness/perpendicularity reference plane at top face (top face of part).
+       decision: treated as a reference boundary, not built geometry
+       why: dashed/phantom/reference linework is not a solid feature
+       affects: metadata: reference boundary
+
+5. BUILD / MACRO FEATURE FAILURES
+   - feature F003 FAILED: FeatureCut4 returned None for F003 in BOTH directions despite verified preconditions (sketch closed & fully defined, profile overlaps the body, depth in meters) — the cut removes no material (coincident with a face or zero-area profile); check the profile geometry, not the build call.
+   - feature F006 FAILED: InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.002286 m, angle=0.7854 rad, 28 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '4092-B' finished NOT READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * macro: solidworks_builder.py (COM feature build) + macro_generator.py (VBA for that feature type)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+     * skipped: macro_generator.py / solidworks_builder.py (prohibited/unsupported feature — add real support or a better manual step)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4092-B

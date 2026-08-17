@@ -1,0 +1,72 @@
+LEARNING LOOP — 4088-A-RevA
+============================================================
+Run:     2026-08-17 00:47:09
+Status:  READY
+Model:   claude-sonnet-5
+Outputs: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4088-A-RevA
+Fingerprint: eb92433e4f78f0b9
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — READY
+   - No gate failures (run reached READY).
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [MEDIUM] The counterbore/drill depth dimensions (1.005 and .250) are stacked with a tolerance-like arrangement near the hole callout in the top/front view area but their exact association (which is drill depth vs counterbore depth) is not clearly distinguishable from the front view alone; the front view's hidden lines for the hole do not clearly delineate two distinct diameters (drill vs counterbore) to confirm blind vs through-hole status.
+       -> Verify in the cropped front view whether the hidden line pattern shows a stepped bore (two diameters) confirming a counterbore over a through or blind drilled hole, and confirm which of 1.005/.250 is the counterbore depth vs full drill depth.
+   - [LOW] .06x45 TYP (4) chamfer note references 4 instances, but only one end view is shown (rounded rectangle) and the top/front views do not clearly show four distinct chamfered edges; it is ambiguous whether the (4) refers to four corners of the block or four edges (top/bottom of two ends).
+       -> Check the front and end views at higher resolution to confirm which 4 edges/corners carry the .06x45 chamfer.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 4, HIGH 1, MEDIUM 3, LOW 1
+   - [CRITICAL] D005 (dimension): D005 decimal placement AMBIGUOUS among ['0.5625', '0.531']; plausibility could not separate them. Kept 0.531 as a best guess and the dependent feature is excluded from the build (Tab-3 assumption) — confirm the value and re-run.
+       decision: resolved value 0.531
+       why: ambiguous multi candidate
+       affects: dimension D005
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout ".06 x 45° TYP (4)" states 4 instance(s), but the per-view extraction captured hole group(s) of [1] (total 1). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout "UNLESS OTHERWISE SPECIFIED: THIRD ANGLE PROJECTION, DIMENSIONS IN INCHES, 2 PLACE DIM ±.02, 3 PLACE DIM ±.010, ANGULAR DIM ±1°, SCALE 1=1" states 2 instance(s), but the per-view extraction captured hole group(s) of [1] (total 1). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] F003 (build): The .sldprt build SKIPPED feature F003 (chamfer): InsertFeatureChamfer returned None for F003 despite verified preconditions (distance=0.001524 m, angle=0.7854 rad, 26 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: InsertFeatureChamfer returned None for F003 despite verified preconditions (distance=0.001524 m, angle=0.7854 rad, 26 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       affects: feature F003
+   - [HIGH] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (top, front, end): .06x45 TYP (4) chamfer note references 4 instances, but only one end view is shown (rounded rectangle) and the top/front views do not clearly show four distinct chamfered edges; it is ambiguous whether the (4) refers to four corners of the block or four edges (top/bottom of two ends). Recommendation: Check the front and end views at higher resolution to confirm which 4 edges/corners carry the .06x45 chamfer.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (top, front): The counterbore/drill depth dimensions (1.005 and .250) are stacked with a tolerance-like arrangement near the hole callout in the top/front view area but their exact association (which is drill depth vs counterbore depth) is not clearly distinguishable from the front view alone; the front view's hidden lines for the hole do not clearly delineate two distinct diameters (drill vs counterbore) to confirm blind vs through-hole status. Recommendation: Verify in the cropped front view whether the hidden line pattern shows a stepped bore (two diameters) confirming a counterbore over a through or blind drilled hole, and confirm which of 1.005/.250 is the counterbore depth vs full drill depth. [request-full-sheet: this looks like a cropped/off-sheet region — upload the complete sheet rather than re-running.]
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM]  (build): Build caveat: F003 (chamfer) skipped: InsertFeatureChamfer returned None for F003 despite verified preconditions (distance=0.001524 m, angle=0.7854 rad, 26 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM] OV004 (overview): The overview POSSIBLY shows 4x fillet (Rounded corners visible on end view (rounded rectangle profile), end view profile corners) with no matching feature in the build.
+       decision: feature is absent from the final part
+       why: present in the overview drawing, missing from the extraction/build
+       affects: fillet feature(s) — verify against the drawing
+   - [LOW] OV005 (overview): Reference/phantom geometry noted: Hidden feature lines (dashed) in front view suggesting internal step or bore continuation not fully dimensioned (front view, center region).
+       decision: treated as a reference boundary, not built geometry
+       why: dashed/phantom/reference linework is not a solid feature
+       affects: metadata: reference boundary
+
+5. BUILD / MACRO FEATURE FAILURES
+   - feature F003 FAILED: InsertFeatureChamfer returned None for F003 despite verified preconditions (distance=0.001524 m, angle=0.7854 rad, 26 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '4088-A-RevA' finished READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * macro: solidworks_builder.py (COM feature build) + macro_generator.py (VBA for that feature type)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+     * skipped: macro_generator.py / solidworks_builder.py (prohibited/unsupported feature — add real support or a better manual step)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4088-A-RevA
