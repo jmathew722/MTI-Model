@@ -1,0 +1,104 @@
+LEARNING LOOP — 4079-D
+============================================================
+Run:     2026-08-17 00:32:45
+Status:  NOT READY
+Model:   claude-sonnet-5
+Outputs: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4079-D
+Fingerprint: 2c9a7d7194bdb59a
+
+Every failure/flag from this run, followed by a paste-ready brief for Claude.
+============================================================
+1. GATE / STATUS — NOT READY
+   - 1 reconciliation item(s) unresolved after 1 pass(es) — see 4079-D_reconciliation_report.json
+
+2. MUST-MEET CONSTRAINT FAILURES  (pre-validation (CadQuery, before SolidWorks))
+   - none
+
+3. CROSS-VIEW CONFLICTS (Stage 1.5 overview analysis)
+   - [MEDIUM] Top view shows 4 slotted holes across the 4.50 wide bar, but the BOM lists 2 pieces of item 2 (.250x1.500x14.75) suggesting a symmetric doubled bar - it's unclear from the top view alone whether all 4 slots are in a single item-3 bar or split 2-and-2 across the two item-2 bars stacked to form the assembly.
+       -> Cross-check by verifying if the 1.181 typ hole pitch and 4.50 width dimension apply to item 3 alone (single flat bar) or represent the combined width of two item-2 bars (1.500 each) plus gaps; confirm against the end view width of 2.000 for item 1 to ensure consistent overall assembly width.
+   - [LOW] Front/long view shows 14.75 and 15.25 as two separate overall length dimensions with only ~0.5 difference, but it is not clear which view feature (angled cut, end plate) accounts for this difference, risking confusion about true overall envelope length.
+       -> Verify against BOM: item 2 length 14.75 and item 3 length 15.25 - confirm in the drawing that the .25 offset (mismatch) corresponds to the end plate thickness or overlap in the welded assembly, not a drafting inconsistency.
+   - [LOW] The R.TYP callout with a leader pointing near one slot in the top view is ambiguous - it's not clear if the radius applies to all 4 slot ends or just corner radii of the bar, since no explicit radius value is given nearby.
+       -> Check for a radius value dimension possibly cropped or omitted; confirm whether R.TYP refers to slot end radii (matching the .219 slot width, i.e., .1095 R) or to bar corner breaks.
+
+4. ENGINEERING FLAGS — ALL SEVERITIES (CRITICAL → HIGH → MEDIUM → LOW)
+   Totals: CRITICAL 7, HIGH 2, MEDIUM 4, LOW 3
+   - [CRITICAL] D026 (dimension): D026 decimal placement AMBIGUOUS among ['0.06', '0.03', '0.109']; plausibility could not separate them. Kept 0.109 as a best guess and the dependent feature is excluded from the build (Tab-3 assumption) — confirm the value and re-run.
+       decision: resolved value 0.109
+       why: ambiguous multi candidate
+       affects: dimension D026
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout ".219 X .75 LG. (4) SLOTS" states 4 instance(s), but the per-view extraction captured hole group(s) of [2] (total 2). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] OV-COUNT (overview_analysis): HOLE-COUNT DISAGREEMENT: the sheet's global callout "UNLESS OTHERWISE SPECIFIED: THIRD ANGLE PROJECTION, DIMENSIONS IN INCHES, tolerance blocks (2/3 place, angular)" states 3 instance(s), but the per-view extraction captured hole group(s) of [2] (total 2). A cropped view cannot resolve this alone — check for an occluded instance (behind the title block or a leader line) before building, or the part will silently miss a feature.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [CRITICAL] F005 (build): The .sldprt build SKIPPED feature F005 (chamfer): InsertFeatureChamfer returned None for F005 despite verified preconditions (distance=0.044704 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: InsertFeatureChamfer returned None for F005 despite verified preconditions (distance=0.044704 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       affects: feature F005
+   - [CRITICAL] F006 (build): The .sldprt build SKIPPED feature F006 (chamfer): InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.003048 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.003048 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       affects: feature F006
+   - [CRITICAL] F007 (build): The .sldprt build SKIPPED feature F007 (hole): deferred_open (zero_thickness_or_geometry): FeatureCut4 returned None for F007 in BOTH directions despite verified preconditions (sketch closed & fully defined, pro
+       decision: feature is absent from the .sldprt; the VBA macros still contain it as a step
+       why: deferred_open (zero_thickness_or_geometry): FeatureCut4 returned None for F007 in BOTH directions despite verified preconditions (sketch closed & fully defined, pro
+       affects: feature F007
+   - [CRITICAL] F008 (reconciliation): Stage 10.5 reconciliation: fillet F008 still unresolved after 1 pass(es)
+       decision: unresolved_after_pass_1
+       why: EXCLUDED FROM BUILD — fillet F008 is missing radius. No value was read, and none could be derived from the constraint graph, a TYP sibling, or a standard size. Rather than emit a build step that fails or places wrong geometry, F008 was left OUT of the model and recorded as a model-derived assumption in Tab 3. Expected on host feature F004. Add the missing value on the drawing and re-run to include this feature.
+       affects: Re-ran Stage 2.5 resolution (pass 1) with every available requirements/overview-analysis signal reloaded from disk; the result was identical to the previous pass — no further information is available to resolve this without fabricating a value, which this pipeline never does.
+   - [HIGH] OV-002 (overview_analysis): CROSS-VIEW CONFLICT (front_view_lower_long, item_bom_table): Front/long view shows 14.75 and 15.25 as two separate overall length dimensions with only ~0.5 difference, but it is not clear which view feature (angled cut, end plate) accounts for this difference, risking confusion about true overall envelope length. Recommendation: Verify against BOM: item 2 length 14.75 and item 3 length 15.25 - confirm in the drawing that the .25 offset (mismatch) corresponds to the end plate thickness or overlap in the welded assembly, not a drafting inconsistency.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [HIGH] OV-003 (overview_analysis): CROSS-VIEW CONFLICT (top_view_upper): The R.TYP callout with a leader pointing near one slot in the top view is ambiguous - it's not clear if the radius applies to all 4 slot ends or just corner radii of the bar, since no explicit radius value is given nearby. Recommendation: Check for a radius value dimension possibly cropped or omitted; confirm whether R.TYP refers to slot end radii (matching the .219 slot width, i.e., .1095 R) or to bar corner breaks. [request-full-sheet: this looks like a cropped/off-sheet region — upload the complete sheet rather than re-running.]
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM] OV-001 (overview_analysis): CROSS-VIEW CONFLICT (top_view_upper, item_bom_table): Top view shows 4 slotted holes across the 4.50 wide bar, but the BOM lists 2 pieces of item 2 (.250x1.500x14.75) suggesting a symmetric doubled bar - it's unclear from the top view alone whether all 4 slots are in a single item-3 bar or split 2-and-2 across the two item-2 bars stacked to form the assembly. Recommendation: Cross-check by verifying if the 1.181 typ hole pitch and 4.50 width dimension apply to item 3 alone (single flat bar) or represent the combined width of two item-2 bars (1.500 each) plus gaps; confirm against the end view width of 2.000 for item 1 to ensure consistent overall assembly width.
+       decision: flagged for human verification; the per-view extracted geometry was kept (tier 1 owns dimensions)
+       why: raised by the Stage 1.5 holistic overview analysis (tier2_overview) — cross-view context a single cropped view cannot provide
+       affects: cross-view consistency of the whole part
+   - [MEDIUM]  (build): Build caveat: F005 (chamfer) skipped: InsertFeatureChamfer returned None for F005 despite verified preconditions (distance=0.044704 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM]  (build): Build caveat: F006 (chamfer) skipped: InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.003048 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [MEDIUM]  (build): Build caveat: F007 (hole) deferred_open after retries: FeatureCut4 returned None for F007 in BOTH directions despite verified preconditions (sketch closed & fully defined, pro
+       decision: applied automatically during the .sldprt build
+       why: the 2D drawing carries no per-edge topology, so scope was chosen automatically
+       affects: see caveat text
+   - [LOW] OV008 (overview): Reference/phantom geometry noted: Perpendicularity callout ⊥|A|.030 datum feature reference (top left corner of front view).
+       decision: treated as a reference boundary, not built geometry
+       why: dashed/phantom/reference linework is not a solid feature
+       affects: metadata: reference boundary
+   - [LOW] OV009 (overview): The overview shows content the checker cannot auto-match: FA-1 flatness/face callout referencing Face A treatment note (side view, near right end)
+       decision: not automatically verified against the build
+       why: no direct counterpart in the build inventory or the non-feature taxonomy
+       affects: manual visual comparison recommended
+   - [LOW] OV010 (overview): Surface Finish note: Heat treatment / weld splatter cleanup note for Face A (bottom right of drawing, general note).
+       decision: attached to part metadata as a surface finish note
+       why: a note, not part geometry — no build counterpart expected
+       affects: metadata: surface finish
+
+5. BUILD / MACRO FEATURE FAILURES
+   - feature F007 FAILED: FeatureCut4 returned None for F007 in BOTH directions despite verified preconditions (sketch closed & fully defined, profile overlaps the body, depth in meters) — the cut removes no material (coincident with a face or zero-area profile); check the profile geometry, not the build call.
+   - feature F005 FAILED: InsertFeatureChamfer returned None for F005 despite verified preconditions (distance=0.044704 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+   - feature F006 FAILED: InsertFeatureChamfer returned None for F006 despite verified preconditions (distance=0.003048 m, angle=0.7854 rad, 49 edge(s) selected, scope 'all edges') — the selected edges likely cannot accept this chamfer distance.
+
+FIXES FOR FABLE (paste this whole file to Claude to plan & apply code fixes)
+   - Part '4079-D' finished NOT READY. Address the items above so the next run on this drawing improves. Suspected code areas:
+     * constraint: constraint_verify.py / cq_prevalidate.py (measurement) + macro_generator.py & solidworks_builder.py (the feature that produced the wrong geometry; for hole counts check the circular-pattern seed inclusion)
+     * macro: solidworks_builder.py (COM feature build) + macro_generator.py (VBA for that feature type)
+     * overview: overview_analysis.py (holistic read) + resolver.py (tier-2 flag / count cross-check) + extractor.py (per-view hole capture)
+     * skipped: macro_generator.py / solidworks_builder.py (prohibited/unsupported feature — add real support or a better manual step)
+   - Prefer a fix that generalizes (fixes the class of failure), not a one-off patch for this single part.
+   - Cross-check against the artifacts in: c:\Users\joeka\MTI_Claude\test_drawings\TEST3_Batch\output\4079-D

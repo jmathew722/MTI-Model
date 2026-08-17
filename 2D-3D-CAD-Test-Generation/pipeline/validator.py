@@ -365,6 +365,20 @@ def _check_edge_treatment_radius(model: DrawingData, report: ValidationReport) -
     thickness = _edge_treatment_thickness(model)
     if thickness <= 0:
         return                       # nothing to compare against; say nothing
+    # A "thickness" at least as large as the part's in-plane envelope is not a
+    # thickness — it is a length that reached this field by mistake. Measured on
+    # a real drawing (TEST3 4079-D, 2026-08-17): the base plate's depth
+    # dimension was D013, value 15.25, whose own applies_to said "length". The
+    # limit computed from it was 7.6 in, so a 1.76 in chamfer passed unflagged
+    # and then failed in SolidWorks. Warning off a bogus number is worse than
+    # staying quiet, so bail out and let _check_extrude_depth_semantics — which
+    # names the real problem — do the talking.
+    from pipeline.macro_generator import _envelope
+
+    length, width = _envelope(model)
+    in_plane = [v for v in (length, width) if v]
+    if in_plane and thickness >= min(in_plane):
+        return
     limit = thickness / 2.0
     for f in model.features:
         if f.type not in (FeatureType.FILLET, FeatureType.CHAMFER):
@@ -383,6 +397,51 @@ def _check_edge_treatment_radius(model: DrawingData, report: ValidationReport) -
             f"treatment at or past half thickness silently does nothing (the call "
             f"returns no feature). Verify the callout applies to a thicker edge, or "
             f"expect this feature to be reported as not applied."
+        )
+
+
+def _check_extrude_depth_semantics(model: DrawingData, report: ValidationReport) -> None:
+    """A feature's depth dimension must not be one the extractor called a LENGTH.
+
+    Found on a real drawing rather than reasoned about (TEST3 `4079-D`,
+    2026-08-17). The base plate is ``.250 x 4.500 x 15.25`` — a quarter-inch
+    plate. The extraction set ``depth_dimension_id = D013``, and D013 is
+    ``applies_to='length'``, value **15.25**. SolidWorks duly extruded the plate
+    15.25 inches thick, every downstream check that asks "how thick is this
+    part" got 15.25, and the model came out 17.25 in across an axis where the
+    drawing says 6.00.
+
+    Nothing here invents the right number — the true 0.250 was never linked to
+    the feature, so it cannot be recovered without guessing. This states the
+    contradiction with both values named, which is what lets a human fix it in
+    one look. Advisory: the build still runs and still ships a model.
+    """
+    from pipeline.macro_generator import _envelope
+
+    IN_PLANE = {"length", "width", "height", "overall_length", "overall_width",
+                "overall_height", "span", "pitch"}
+    by_id = {d.id: d for d in model.dimensions}
+    for f in model.features:
+        if f.type not in (FeatureType.EXTRUDE_BOSS, FeatureType.EXTRUDE_CUT):
+            continue
+        dim = by_id.get(f.depth_dimension_id or "")
+        if dim is None:
+            continue
+        token = (dim.canonical_applies_to or dim.applies_to or "").strip().lower()
+        if token not in IN_PLANE:
+            continue
+        length, width = _envelope(model)
+        extra = ""
+        if length and width and dim.value >= min(length, width):
+            extra = (f" It is also >= the part's smaller in-plane extent "
+                     f"({min(length, width):g}), so the solid will be thicker than "
+                     f"it is wide.")
+        report.warn(
+            f"{f.id}: its depth comes from {dim.id} ({dim.value:g}), a dimension the "
+            f"extraction itself labelled {token!r} — an in-plane extent, not a "
+            f"thickness.{extra} VERIFY the depth against the drawing; if this is a "
+            f"plate, its thickness is probably a much smaller callout that was not "
+            f"linked to this feature."
         )
 
 
@@ -514,6 +573,7 @@ def run_verification(
     _check_instance_positions(model, report)
     _check_unmodeled_fillets(model, report)
     _check_edge_treatment_radius(model, report)
+    _check_extrude_depth_semantics(model, report)
     _check_mirror_features(model, report)
     _check_view_consistency(model, report)
 
