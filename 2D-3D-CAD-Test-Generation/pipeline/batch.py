@@ -741,6 +741,15 @@ def process_drawing_data(drawing_data: dict, source: str, output_dir: Path,
         from pipeline.engineering_review import write_delivery_report
         from pipeline.validation import write_scorecard
 
+        # Stage 10.6 FIRST: the scorecard's feature_audit layer reads the file
+        # this writes. Before 2026-08-17 nothing called it, so that layer was
+        # SKIPPED on every part ever built (E027).
+        try:
+            from pipeline.feature_verify import verify_from_part_dir
+
+            verify_from_part_dir(part_dir, part)
+        except Exception:
+            pass                                  # advisory stage, never fatal
         sc_path = write_scorecard(part_dir, part, drawing_data)
         if sc_path is not None:
             import json as _json

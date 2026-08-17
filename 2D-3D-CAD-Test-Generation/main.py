@@ -1072,6 +1072,14 @@ def main() -> int:
                 from pipeline.engineering_review import write_delivery_report
                 from pipeline.validation import write_scorecard
 
+                # Stage 10.6 FIRST — see pipeline/batch.py; the scorecard's
+                # feature_audit layer consumes what this writes (E027).
+                try:
+                    from pipeline.feature_verify import verify_from_part_dir
+
+                    verify_from_part_dir(pkg.root, pkg.root.name)
+                except Exception:
+                    pass
                 sc = write_scorecard(pkg.root, pkg.root.name, raw_extraction)
                 if sc is not None:
                     card = json.loads(sc.read_text(encoding="utf-8"))

@@ -684,3 +684,60 @@ def verify_features(
         except OSError as e:
             log.warning("Could not write feature_verification.json: %s", e)
     return report
+
+
+def verify_from_part_dir(part_dir: "Path | str", part: str = "") -> Optional[dict]:
+    """Stage 10.6 for a finished part directory — the ONE wiring point.
+
+    Added 2026-08-17 (E027). ``verify_features`` existed, was tested, and was
+    listed as Stage 10.6 in the stage index — but **no entry point ever called
+    it**. Every TEST3 part therefore reported
+    ``feature_audit: SKIPPED — no per-feature verification on disk``, so nothing
+    checked that individual features landed at the right place and size. The
+    only geometric check that ran was the three-extent bounding box, which is
+    why a part could match its envelope, be missing two holes, and pass.
+
+    Both entry points (``main.py`` and ``pipeline/batch.py``) call THIS, not
+    ``verify_features`` directly: two hand-written wirings of the same stage is
+    exactly the cross-path divergence class this repo has already been bitten by.
+
+    Locates the STL, build plan and resolved extraction from the part directory's
+    own naming. Returns the report, or ``None`` when a required input is absent
+    (an unbuilt part has no STL — that is a skip, not an error). Never raises:
+    a verification stage that breaks the run would be worse than the gap it fills.
+    """
+    from pathlib import Path as _Path
+
+    part_dir = _Path(part_dir)
+    part = part or part_dir.name
+
+    def _first(*patterns: str) -> Optional[_Path]:
+        for pat in patterns:
+            for p in sorted(part_dir.glob(pat)):
+                if p.is_file():
+                    return p
+        return None
+
+    def _json(path: Optional[_Path]) -> Optional[dict]:
+        if path is None:
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    try:
+        stl = _first("*.STL", "*.stl")
+        plan = _json(_first("*_build_plan.json"))
+        if stl is None or not plan:
+            return None
+        return verify_features(
+            stl, plan, part_dir,
+            resolved_extraction=_json(_first("*_resolved_extraction.json",
+                                             "*_extraction.json")),
+            part=part, write=True,
+        )
+    except Exception as e:                       # never break the run
+        log.warning("Stage 10.6 feature verification failed for %s: %s: %s",
+                    part, type(e).__name__, e)
+        return None

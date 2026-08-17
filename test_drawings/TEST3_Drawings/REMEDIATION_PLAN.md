@@ -50,7 +50,7 @@ exact pretty-printed shape the COM builder emits. **One existing test asserted
 the bug** (`excluded_features_are_an_advisory_not_a_failure`) and was changed
 deliberately, with the reason recorded in its docstring.
 
-### A2. `feature_audit` is SKIPPED on every part — **root cause found**
+### A2. `feature_audit` is SKIPPED on every part — **DONE (2026-08-17)**
 
 **Evidence.** All five built parts:
 `feature_audit: SKIPPED — "no per-feature verification on disk"`.
@@ -70,8 +70,29 @@ why a part can match its envelope and still be missing two holes.
 plan: it converts "the box is the right size" into "every feature is where the
 drawing says", which is what the user actually means by *perfectly modelled*.
 
-**Verification.** Re-run 4086-A; the audit must report on all 3 features and flag
-the over-applied chamfer (C1) without being told about it.
+**Fixed.** One owner — `feature_verify.verify_from_part_dir(part_dir, part)` —
+locates the STL, build plan and resolved extraction from the part directory and
+writes the report. Called from **both** `main.py` and `pipeline/batch.py`; two
+hand-written wirings of one stage is the cross-path divergence class this repo
+has already been bitten by. Never raises: an advisory stage that breaks the run
+would be worse than the gap it fills.
+
+**It earned itself on the first part.** Every one of the five is worse than the
+bounding box said:
+
+| part | feature audit |
+|---|---|
+| 4086-A-RevA | **F002 = MISSING** — the counterbored hole |
+| 4088-A-RevA | **F002 = MISSING** |
+| 4092-B | F001 = WRONG_SIZE, F004 = MISSING |
+| 4080-D-RevB | F002 = WRONG_SIZE, F009 = MISSING |
+| 4079-D | F001 = WRONG_SIZE, F007 = MISSING, +1 |
+
+**This overturns the earlier answer to "which parts are perfectly modelled".**
+4086-A was called the cleanest in the batch on the strength of a matching
+envelope and no failed features. It is missing its hole. Nothing in the batch is
+close to correct, and the envelope check was never capable of saying so —
+`overall` is now FAIL on all five.
 
 ### A3. ~~`validation.json` has `verdict: None` on every part~~ — **WITHDRAWN, my error**
 
