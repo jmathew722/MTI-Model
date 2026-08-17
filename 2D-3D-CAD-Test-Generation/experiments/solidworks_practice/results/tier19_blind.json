@@ -7,7 +7,7 @@
   "audit": {
     "F001": "OK",
     "F_THRU": "WRONG_SIZE",
-    "F_BLIND": "MISSING"
+    "F_BLIND": "OK"
   },
-  "verdict": "inconclusive - the THROUGH hole itself was not detected ({'F001': 'OK', 'F_THRU': 'WRONG_SIZE', 'F_BLIND': 'MISSING'})"
+  "verdict": "inconclusive - the THROUGH hole itself was not detected ({'F001': 'OK', 'F_THRU': 'WRONG_SIZE', 'F_BLIND': 'OK'})"
 }

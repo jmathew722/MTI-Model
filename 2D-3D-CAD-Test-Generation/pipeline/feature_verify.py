@@ -137,7 +137,26 @@ class _Mesh:
             return any(math.hypot(c["x"] - o["x"], c["y"] - o["y"]) <= DEFAULT_POS_TOL_IN * 3
                        for o in group)
 
-        return [{**c, "through": _present(c, near) and _present(c, far)} for c in mid]
+        holes = [{**c, "through": _present(c, near) and _present(c, far)} for c in mid]
+
+        # BLIND HOLES SHALLOWER THAN HALF THE THICKNESS never reach the
+        # mid-plane, so slicing only at 0.5 cannot see them at all. Proven
+        # 2026-08-17 (E028, `t19_blind_hole_detection.py`): a 0.38-deep ⌀0.5 hole
+        # in a 1.0 plate was measurably cut (volume 11.80365 -> 11.72904) and
+        # this method reported it MISSING — a FALSE POSITIVE that made a
+        # correctly built TEST3 part look broken.
+        #
+        # A circle present near a face but absent at mid-depth is exactly that:
+        # a recess that does not pierce the part. Recover it as a blind hole.
+        for group in (near, far):
+            for c in group:
+                if _present(c, mid):
+                    continue                       # already counted above
+                if any(math.hypot(c["x"] - h["x"], c["y"] - h["y"])
+                       <= DEFAULT_POS_TOL_IN * 3 for h in holes):
+                    continue                       # same hole seen from both faces
+                holes.append({**c, "through": False})
+        return holes
 
     def _midplane_polygons(self) -> Optional[tuple[list, list]]:
         """(outer_boundary, [holes]) polygons of the mid-thickness section, each

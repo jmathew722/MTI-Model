@@ -460,14 +460,26 @@ it elsewhere either).
   worse than the envelope said" was **overstated** and is withdrawn for 4086-A.
 * **4088-A-RevA's is NOT explained by this** — that hole is `through: true`, so
   its MISSING survives and is still a real finding.
-* A second, smaller defect surfaced in the same run: the through hole, cut at
-  exactly ⌀0.5, was classified **WRONG_SIZE**. The STL diameter measurement has
-  a systematic error worth its own investigation.
+* ~~A second defect: the through hole was classified WRONG_SIZE, so the STL
+  diameter measurement has a systematic error.~~ **WRONG — my test fixture, not
+  the code.** The measurement is fine: `diameter expected 0.5, measured 0.4989,
+  PASS`. The WRONG_SIZE came from `through: expected False, measured True` — my
+  synthetic plan omitted the through flag on a through hole, so it defaulted to
+  blind. Nothing to fix.
 
-**Fix:** NOT MADE. `feature_verify` needs blind-hole detection (a cylindrical
-recess that does not pierce the far face) before any of its MISSING verdicts on
-blind features can be trusted, and its diameter measurement needs checking. Until
-then, treat `MISSING` on a `through: false` feature as UNKNOWN, not as absent.
+**FIXED (2026-08-17).** Root cause: `_Mesh.measured_holes` sliced the mesh
+**only at the mid-plane** (`circles_at(0.5)`). A blind hole shallower than half
+the thickness never reaches it and was therefore invisible — not mis-measured,
+simply never looked for. The method now also takes the near/far face slices and
+recovers any circle present near a face but absent at mid-depth as a blind hole.
+
+Verified on the same experiment that exposed it: `F_BLIND` went
+**MISSING → OK**, with the through hole still correctly `through: True`. All 16
+`feature_verify` tests and the full 1255-test suite pass.
+
+Consequence: 4086-A-RevA's `F002 MISSING` was a false positive and should be
+re-measured; the part may be correct. 4088-A-RevA's through-hole MISSING still
+stands and is still unexplained.
 **Contributing factor found on 4088-A:** the planned hole diameter is `0.499`,
 which is that key's own HEIGHT (`1.75 x .499`); the drawing calls the hole out
 only as "DR & C'BORE FOR #10 SOC. HD. CAP SCR" with no explicit diameter. A hole
