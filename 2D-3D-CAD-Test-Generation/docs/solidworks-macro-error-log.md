@@ -409,3 +409,23 @@ box, which cannot see a missing hole.
 **Fix:** NOT YET MADE — planned as Tier A of
 `test_drawings/TEST3_Drawings/REMEDIATION_PLAN.md`. Until then, trust
 `<part>_model_check.txt` over `validation.json` for build completeness.
+
+### E028 — the builder records PASS for a hole that is not in the model
+**Symptom:** `macro_result.json` says `F002 PASS`; Stage 10.6 measures the STL
+and reports `F002 MISSING, measured: None`. Observed on TEST3 parts
+4086-A-RevA and 4088-A-RevA, 2026-08-17, immediately after Stage 10.6 was wired
+in for the first time.
+**Distinct from E027.** E027 was the scorecard failing to READ a recorded
+failure. Here the recorded value is itself wrong: the builder returned a feature
+object from `FeatureCut4`, logged PASS, and the geometry is absent. The source of
+truth is lying, which is worse than the reader being broken.
+**Contributing factor found on 4088-A:** the planned hole diameter is `0.499`,
+which is that key's own HEIGHT (`1.75 x .499`); the drawing calls the hole out
+only as "DR & C'BORE FOR #10 SOC. HD. CAP SCR" with no explicit diameter. A hole
+as wide as the part is thick is a degenerate cut. Same class as the
+depth-semantics defect: a dimension used for a purpose its own label contradicts.
+**Fix:** NOT MADE. Two candidates, both untested: (a) verify the cut actually
+removed material before logging PASS — the volume is already measured either side
+of most build steps; (b) generalise the C2 guard so any feature dimension equal
+to an envelope value is flagged at plan time. See Tier B1 of
+`test_drawings/TEST3_Drawings/REMEDIATION_PLAN.md`.

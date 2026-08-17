@@ -108,7 +108,7 @@ working as intended. Left in the plan as a record rather than deleted.
 
 ## Tier B — Missing geometry
 
-### B1. `FeatureCut4` returns `None` in BOTH directions — 4 features across 3 parts
+### B1. Missing cuts — **PARTIALLY DIAGNOSED (2026-08-17), not fixed**
 
 **Evidence.** 4079-D F007 (hole), 4080-D F007 (extrude_cut) + F009 (hole),
 4092-B F003 (extrude_cut). Error class `zero_thickness_or_geometry`. The builder
@@ -137,6 +137,40 @@ genuinely bad.
 profile overlaps the body in XY *and* that the cut depth is not exactly flush,
 then report which condition failed. Overshoot already exists for open-edge cuts
 (`slot_cut.EDGE_OVERSHOOT_EPS`) — the same idea generalises to through-cuts.
+
+#### What Stage 10.6 then revealed — two things the deferral log never showed
+
+**(a) The builder reports PASS for holes that are not in the model.** Both keys:
+
+```
+4086-A  macro_result: F001 PASS, F002 PASS, F003 PASS
+        audit:        F002 MISSING  expected {x 2.75, y 0.5, dia 0.38, through False}, measured None
+4088-A  macro_result: F001 PASS, F002 PASS, F003 FAIL
+        audit:        F002 MISSING  expected {x 0.88, y 0.25, dia 0.499, through True},  measured None
+```
+
+This is **not** E027 — that was the scorecard failing to read a recorded FAIL.
+Here the builder genuinely recorded **PASS** for a feature that is absent from
+the geometry. `FeatureCut4` returned an object and the hole is not there. A
+second, independent reporting defect, and the more dangerous of the two because
+the source of truth itself is wrong. **Log as E028.**
+
+**(b) 4088-A's hole diameter is the part's own height.** The audit expects
+`diameter 0.499` — and `.499` is the KEY's **height** on that drawing
+(`1.75 × .499`, with the hole called out only as *"DR & C'BORE FOR #10 SOC. HD.
+CAP SCR"*, which carries no explicit diameter). A hole as wide as the part is
+thick is a degenerate cut, which is a plausible cause of the cut doing nothing.
+
+This is the **same class as the depth-semantics defect (C2)**: a dimension used
+for a purpose its own label contradicts. It suggests C2's guard should generalise
+beyond `depth_dimension_id` to any feature dimension that duplicates an envelope
+value — a hole whose diameter equals the part height deserves the same warning a
+plate whose thickness equals its length gets.
+
+**Revised view of B1.** The plan assumed one failure mode (bad profile geometry).
+There are at least two, and the misassigned-dimension one may be the larger:
+it would explain the keys, and it is fixable at plan time rather than in
+SolidWorks.
 
 ### B2. Chamfers fail on real parts — **OPEN, two hypotheses already disproved (E026)**
 
